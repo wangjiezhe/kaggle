@@ -1,0 +1,10 @@
+.vscode/
+.venv/
+__pycache__/
+data/
+lightning_logs/
+*.py[cod]
+.ipynb_checkpoints
+*.ckpt
+*.pt
+*.pth
