@@ -39,7 +39,7 @@ def init_cnn(m):
 
 def predict(model, data):
     data.setup("predict")
-    features = data.predict_data.tensors[0]
+    features = data.predict_data.tensors[0].to("cpu")
     preds = model.to("cpu")(features).detach().numpy()
     submission = pd.concat(
         [data.predict_data_id, pd.Series(preds.reshape(1, -1)[0])],
