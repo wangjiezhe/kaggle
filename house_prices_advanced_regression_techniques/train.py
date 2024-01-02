@@ -18,8 +18,9 @@ def train(
     batch_size=256,
     test=True,
     predict=False,
+    split=True,
 ):
-    data = KaggleData(batch_size=batch_size)
+    data = KaggleData(batch_size=batch_size, split=split)
     if load_path is not None:
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint["state_dict"], strict=False)
@@ -37,4 +38,4 @@ def train(
 
 if __name__ == "__main__":
     model = MLP(optim="Adam")
-    train(model, 1000, predict=True)
+    train(model, 800, predict=True)

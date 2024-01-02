@@ -1,58 +1,71 @@
-#!/usr/bin/env python3
-
 import os.path
+from typing import Any
 
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 from torch import nn, optim
-from utils import init_cnn, log_mse_loss
+from utils import init_cnn, RMSLE
 
 
 class Classifier(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.train_loss = torch.tensor(float("inf"))
+        self.train_loss = RMSLE()
+        self.val_loss = RMSLE()
+        self.test_loss = RMSLE()
         self.train_loss_min = torch.tensor(float("inf"))
         self.val_loss_min = torch.tensor(float("inf"))
-        self.test_loss = torch.tensor(float("inf"))
         self.input_size = 330
         self.output_size = 1
+
+    def on_train_epoch_start(self):
+        self.train_loss.reset()
+
+    def on_train_epoch_end(self):
+        loss = self.train_loss.compute()
+        self.log("train_loss_epoch", loss)
+        self.train_loss_min = min(loss, self.train_loss_min)
+
+    def on_validation_epoch_start(self):
+        self.val_loss.reset()
+
+    def on_validation_epoch_end(self):
+        self.val_loss_min = min(self.val_loss.compute(), self.val_loss_min)
+
+    def on_test_epoch_start(self):
+        self.test_loss.reset()
 
     def training_step(self, batch):
         features, labels = batch
         preds = self(features)
-        self.train_loss = log_mse_loss(preds, labels)
-        if self.train_loss < self.train_loss_min:
-            self.train_loss_min = self.train_loss
-        self.log("train_loss", self.train_loss, prog_bar=True)
-        return self.train_loss
+        loss = self.train_loss(preds, labels)
+        self.log("train_loss", loss, prog_bar=True)
+        return loss
 
     def validation_step(self, batch):
         features, labels = batch
         preds = self(features)
-        self.val_loss = log_mse_loss(preds, labels)
-        if self.val_loss < self.val_loss_min:
-            self.val_loss_min = self.train_loss
-        self.log("val_loss", self.val_loss, prog_bar=True)
-        return self.val_loss
+        loss = self.val_loss(preds, labels)
+        self.log("val_loss", loss, prog_bar=True)
+        return loss
 
     def test_step(self, batch):
         features, labels = batch
         preds = self(features)
-        self.test_loss = log_mse_loss(preds, labels)
-        self.log("test_loss", self.test_loss, prog_bar=True)
-        return self.test_loss
+        loss = self.test_loss(preds, labels)
+        self.log("test_loss", loss, prog_bar=True)
+        return loss
 
     def on_test_end(self):
         self.logger.log_hyperparams(
             self.hparams,
             {
-                "hp/train_loss": self.train_loss,
+                "hp/train_loss": self.train_loss.compute(),
                 "hp/train_loss_min": self.train_loss_min,
-                "hp/val_loss": self.val_loss,
+                "hp/val_loss": self.val_loss.compute(),
                 "hp/val_loss_min": self.val_loss_min,
-                "hp/test_loss": self.test_loss,
+                "hp/test_loss": self.test_loss.compute(),
             },
         )
 

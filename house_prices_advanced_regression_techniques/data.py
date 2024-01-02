@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os.path
 
 import pandas as pd
@@ -16,14 +14,15 @@ class KaggleData(pl.LightningDataModule):
         train_csv="train.csv",
         predict_csv="test.csv",
         num_workers=8,
+        split=True,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.train_data_path = os.path.join(data_dir, train_csv)
         self.predict_data_path = os.path.join(data_dir, predict_csv)
-        self.current_fold = 0
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.split = split
 
     def setup(self, stage=None):
         # 读取数据
@@ -51,7 +50,11 @@ class KaggleData(pl.LightningDataModule):
                 torch.tensor(train_features, dtype=torch.float32),
                 torch.tensor(train_labels, dtype=torch.float32).reshape(-1, 1),
             )
-            self.train_data, self.val_data = random_split(dataset, [0.9, 0.1])
+            if self.split:
+                self.train_data, self.val_data = random_split(dataset, [0.9, 0.1])
+            else:
+                self.train_data = dataset
+                _, self.val_data = random_split(dataset, [0.9, 0.1])
         if stage == "test" or stage is None:
             train_features = all_features[:n_train].values
             train_labels = train_data.SalePrice.values
