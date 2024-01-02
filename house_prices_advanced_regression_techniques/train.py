@@ -38,4 +38,6 @@ def train(
 
 if __name__ == "__main__":
     model = MLP(optim="Adam")
-    train(model, 800, predict=True)
+    round = 8
+    for i in range(round):
+        train(model, 100, predict=(i >= round - 1))
