@@ -8,4 +8,4 @@ lightning_logs/
 *.ckpt
 *.pt
 *.pth
-*.csv
+submission*.csv
