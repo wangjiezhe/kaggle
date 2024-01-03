@@ -15,15 +15,16 @@ class LeavesData(pl.LightningDataModule):
         batch_size=64,
         num_workers=8,
         aug=None,
-        train_images_dir="./data/images_train",
+        data_dir="./data",
+        train_images_dir="images_cleaned_train",
         split=True,
         normalize=True,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["aug"])
-        self.train_images_dir = train_images_dir
-        self.predict_images_dir = "./data"
-        self.predict_csv = "./data/test.csv"
+        self.data_dir = data_dir
+        self.train_images_dir = os.path.join(data_dir, train_images_dir)
+        self.predict_csv = os.path.join(data_dir, "test.csv")
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.split = split
@@ -57,7 +58,7 @@ class LeavesData(pl.LightningDataModule):
             )
 
     def image_to_tensor(self, filename):
-        with Image.open(os.path.join(self.predict_images_dir, filename)) as img:
+        with Image.open(os.path.join(self.data_dir, filename)) as img:
             img_tensor = self.trans_predict(img)
         return img_tensor
 

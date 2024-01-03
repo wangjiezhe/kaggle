@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torchmetrics import Accuracy
+from torchmetrics import Accuracy, ConfusionMatrix
 from torchvision import models
 
 
@@ -15,9 +15,13 @@ class Classifier(pl.LightningModule):
         self.output_size = 176
         self.train_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
         self.val_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
-        self.test_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
+        self.test_top1_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
+        self.test_top2_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=2)
         self.test_top5_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=5)
+        self.test_top9_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=9)
         self.predict_labels = []
+        self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=self.output_size)
+        self.translation_map = None
 
     def on_train_epoch_start(self):
         self.train_acc.reset()
@@ -26,8 +30,11 @@ class Classifier(pl.LightningModule):
         self.val_acc.reset()
 
     def on_test_epoch_start(self):
-        self.test_acc.reset()
+        self.test_top1_acc.reset()
+        self.test_top2_acc.reset()
         self.test_top5_acc.reset()
+        self.test_top9_acc.reset()
+        self.confusion_matrix.reset()
 
     def training_step(self, batch):
         features, labels = batch
@@ -50,9 +57,20 @@ class Classifier(pl.LightningModule):
         features, labels = batch
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
-        acc = self.test_acc(preds, labels)
+        top1_acc = self.test_top1_acc(preds, labels)
+        top2_acc = self.test_top2_acc(preds, labels)
         top5_acc = self.test_top5_acc(preds, labels)
-        self.log_dict({"test_loss": loss, "test_acc": acc, "test_top5_acc": top5_acc}, prog_bar=True)
+        top9_acc = self.test_top9_acc(preds, labels)
+        self.confusion_matrix(preds, labels)
+        self.log_dict(
+            {
+                "test_loss": loss,
+                "test_top1_acc": top1_acc,
+                "test_top2_acc": top2_acc,
+                "test_top5_acc": top5_acc,
+                "test_top9_acc": top9_acc,
+            }
+        )
         return loss
 
     def on_test_end(self):
@@ -61,10 +79,37 @@ class Classifier(pl.LightningModule):
             {
                 "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
-                "hp/test_acc": self.test_acc.compute(),
-                "hp/test_top5_acc": self.test_top5_acc.compute(),
+                "hp/test_acc": self.test_top1_acc.compute(),
             },
         )
+
+        confmat = self.confusion_matrix.compute()
+        errors = confmat.clone()
+        errors.fill_diagonal_(0)
+        values, indices = errors.view(-1).topk(20)
+        values, indices = values.tolist(), indices.tolist()
+        real_indicies = [(i // self.output_size, i % self.output_size) for i in indices]
+
+        label_map = self.trainer.datamodule.label_map
+        if not self.translation_map:
+            df_trans = pd.read_csv("plant_name.csv", encoding="utf-8")
+            self.translation_map = {k: v for k, v in zip(df_trans.iloc[:, 0], df_trans.iloc[:, 1])}
+
+        df = pd.DataFrame(
+            [
+                [
+                    t := label_map[row],
+                    self.translation_map[t],
+                    confmat[row, row].item(),
+                    f := label_map[col],
+                    self.translation_map[f],
+                    value,
+                ]
+                for value, (row, col) in zip(values, real_indicies)
+            ],
+            columns=("True label", "准确值", "Corrects", "Predict label", "预测值", "Wrongs"),
+        )
+        print(df.to_markdown())
 
     def predict_step(self, batch):
         features = batch[0]
