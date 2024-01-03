@@ -1,6 +1,3 @@
-import os
-
-import pandas as pd
 from torch import nn
 
 

@@ -5,8 +5,8 @@ import torch
 from data import LeavesData
 from model import *
 from pytorch_lightning.loggers import TensorBoardLogger
-from regex import B
 from torchvision import models
+from torchvision.transforms import v2
 
 torch.set_float32_matmul_precision("high")
 
@@ -15,18 +15,19 @@ def train(
     model,
     epoch,
     logger_version=None,
+    log_every_n_steps=None,
     save_path=None,
     load_path=None,
     save_pickle_path=None,
     load_pickle_path=None,
     batch_size=128,
     num_workers=8,
-    log_every_n_steps=5,
+    aug=None,
+    split=True,
     test=True,
     predict=False,
-    split=True,
 ):
-    data = LeavesData(batch_size=batch_size, split=split, num_workers=num_workers)
+    data = LeavesData(batch_size=batch_size, num_workers=num_workers, aug=aug, split=split)
     if load_path is not None:
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint["state_dict"], strict=False)
@@ -59,9 +60,24 @@ def predict(model, batch_size=128, load_path=None, load_pickle_path=None):
     trainer.predict(model, data)
 
 
+# ResNet18/34: batch_size=128
+# ResNet50, RegNetX_1.6GF: batch_size=64
+# RegNetX_3.2/8GF, RegNetY_3.2GF, ConvNeXt Small: batch_size=32
+# RegNetY_8GF: batch_size=24
+# ConvNeXt Base:
+
 if __name__ == "__main__":
-    # ResNet18/34: batch_size=128
-    # ResNet50, RegNetX_1.6GF: batch_size=64
-    # RegNetX_3.2/8GF: batch_size=32
-    model = ResNet_pretrained(models.regnet_x_3_2gf, models.regnet.RegNet_X_3_2GF_Weights.IMAGENET1K_V2)
-    train(model, 8, predict=True, batch_size=32)
+    # model = ResNet_pretrained(models.regnet_x_3_2gf, models.RegNet_X_3_2GF_Weights.IMAGENET1K_V2)
+    # train(model, 8, predict=True, batch_size=32)
+    train_aug = v2.Compose(
+        [
+            v2.RandomHorizontalFlip(),
+            v2.RandomVerticalFlip(),
+            v2.RandomRotation(90),
+            v2.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+        ]
+    )
+    model = ResNet(models.regnet_y_3_2gf, weights="DEFAULT")
+    round = 3
+    for i in range(round):
+        train(model, 4, predict=True, batch_size=32, aug=train_aug)
