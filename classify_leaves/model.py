@@ -85,55 +85,10 @@ class Classifier(pl.LightningModule):
             },
         )
 
-        confmat = self.confusion_matrix.compute()
-        errors = confmat.clone()
-        errors.fill_diagonal_(0)
-        values, indices = errors.view(-1).topk(20)
-        values, indices = values.tolist(), indices.tolist()
-        real_indicies = [(i // NUM_CLASSES, i % NUM_CLASSES) for i in indices]
-
-        label_map = self.trainer.datamodule.label_map
-        if self.translation_map is None:
-            df_trans = pd.read_csv("plant_name.csv", encoding="utf-8")
-            self.translation_map = {k: v for k, v in zip(df_trans.iloc[:, 0], df_trans.iloc[:, 1])}
-
-        df = pd.DataFrame(
-            [
-                [
-                    t := label_map[row],
-                    self.translation_map[t],
-                    confmat[row, row].item(),
-                    f := label_map[col],
-                    self.translation_map[f],
-                    value,
-                ]
-                for value, (row, col) in zip(values, real_indicies)
-            ],
-            columns=("True label", "准确值", "Corrects", "Predict label", "预测值", "Wrongs"),
-        )
-        print(df.to_markdown())
-
     def predict_step(self, batch):
         features = batch[0]
         preds = self(features).argmax(axis=1)
         return preds
-
-    def on_predict_end(self):
-        submission = pd.concat(
-            [
-                self.trainer.datamodule.predict_images,
-                pd.Series(
-                    [
-                        self.trainer.datamodule.label_map[i]
-                        for i in torch.stack(self.trainer.predict_loop.predictions).view(-1).tolist()
-                    ],
-                    name="label",
-                ),
-            ],
-            axis=1,
-        )
-        now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        submission.to_csv(f"submission_{now}.csv", index=False)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())

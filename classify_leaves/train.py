@@ -2,6 +2,7 @@
 
 import pytorch_lightning as pl
 import torch
+from callback import *
 from data import LeavesData
 from model import *
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -24,11 +25,13 @@ train_aug = v2.Compose(
 def train(
     model,
     epoch,
+    best_model=False,
+    callbacks=None,
     logger_version=None,
-    save_path=None,
-    load_path=None,
-    save_pickle_path=None,
-    load_pickle_path=None,
+    checkpoint_path=None,
+    weight_path=None,
+    save_checkpoint_path=None,
+    save_weight_path=None,
     batch_size=128,
     num_workers=8,
     aug=train_aug,
@@ -38,24 +41,36 @@ def train(
     predict=False,
     **kwargs
 ):
+    if checkpoint_path is not None:
+        state = torch.load(checkpoint_path)
+        model.load_state_dict(state["state_dict"], strict=False)
+    elif weight_path is not None:
+        state = torch.load(weight_path)
+        model.load_state_dict(state, strict=False)
+
     data = LeavesData(batch_size=batch_size, num_workers=num_workers, aug=aug, split=split, mix=mix)
-    if load_path is not None:
-        checkpoint = torch.load(load_path)
-        model.load_state_dict(checkpoint["state_dict"], strict=False)
-    elif load_pickle_path is not None:
-        checkpoint = torch.load(load_pickle_path)
-        model.load_state_dict(checkpoint, strict=False)
     logger = TensorBoardLogger(".", default_hp_metric=False, version=logger_version)
-    trainer = pl.Trainer(max_epochs=epoch, logger=logger, **kwargs)
+
+    ck = [analyse_confusion_matrix]
+    if predict:
+        ck += [save_prediction]
+    if best_model:
+        ck += [save_best_train_loss, save_best_val_loss, save_best_val_acc]
+    if callbacks:
+        if isinstance(callbacks, Callback):
+            callbacks = [callbacks]
+        ck += callbacks
+
+    trainer = pl.Trainer(max_epochs=epoch, logger=logger, callbacks=ck, **kwargs)
     trainer.fit(model, data)
     if test:
         trainer.test(model, data)
     if predict:
         trainer.predict(model, data)
-    if save_path is not None:
-        trainer.save_checkpoint(save_path)
-    if save_pickle_path is not None:
-        torch.save(model.state_dict(), save_pickle_path)
+    if save_checkpoint_path is not None:
+        trainer.save_checkpoint(save_checkpoint_path)
+    if save_weight_path is not None:
+        torch.save(model.state_dict(), save_weight_path)
 
 
 def predict(model, batch_size=128, load_path=None, load_pickle_path=None):
