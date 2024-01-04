@@ -7,14 +7,14 @@ import torch.nn.functional as F
 from torch import nn
 from torchmetrics import Accuracy, ConfusionMatrix
 from torchvision import models
-from utils import cutmix_or_mixup, NUM_CLASSES
+from utils import NUM_CLASSES
 
 
 class Classifier(pl.LightningModule):
     def __init__(self):
         super().__init__()
 
-        # self.train_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
+        self.train_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
         self.val_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
         self.test_top1_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
         self.test_top2_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=2)
@@ -23,8 +23,8 @@ class Classifier(pl.LightningModule):
         self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=NUM_CLASSES)
         self.translation_map = None
 
-    # def on_train_epoch_start(self):
-    #     self.train_acc.reset()
+    def on_train_epoch_start(self):
+        self.train_acc.reset()
 
     def on_validation_epoch_start(self):
         self.val_acc.reset()
@@ -38,18 +38,14 @@ class Classifier(pl.LightningModule):
 
     def training_step(self, batch):
         features, labels = batch
-        # features, labels = cutmix_or_mixup(*batch)
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
-        self.log("train_loss", loss, prog_bar=True)
+        metric = {"train_loss": loss}
+        if self.trainer.datamodule.mix is None:
+            with torch.no_grad():
+                metric["train_acc"] = self.train_acc(preds, labels)
+        self.log_dict(metric, prog_bar=True)
         return loss
-
-    # def on_train_batch_end(self, outputs, batch, batch_idx):
-    #     features, labels = batch
-    #     with torch.no_grad():
-    #         preds = self(features)
-    #     acc = self.train_acc(preds, labels)
-    #     self.log_dict({"train_loss": outputs["loss"], "train_acc": acc}, prog_bar=True)
 
     def validation_step(self, batch):
         features, labels = batch
@@ -83,7 +79,7 @@ class Classifier(pl.LightningModule):
         self.logger.log_hyperparams(
             self.hparams,
             {
-                # "hp/train_acc": self.train_acc.compute(),
+                "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
                 "hp/test_acc": self.test_top1_acc.compute(),
             },
@@ -97,7 +93,7 @@ class Classifier(pl.LightningModule):
         real_indicies = [(i // NUM_CLASSES, i % NUM_CLASSES) for i in indices]
 
         label_map = self.trainer.datamodule.label_map
-        if not self.translation_map:
+        if self.translation_map is None:
             df_trans = pd.read_csv("plant_name.csv", encoding="utf-8")
             self.translation_map = {k: v for k, v in zip(df_trans.iloc[:, 0], df_trans.iloc[:, 1])}
 
