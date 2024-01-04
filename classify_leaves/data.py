@@ -4,9 +4,10 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, random_split, TensorDataset
+from torch.utils.data import DataLoader, default_collate, random_split, TensorDataset
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
+from utils import mixup
 
 
 class LeavesData(pl.LightningDataModule):
@@ -45,10 +46,7 @@ class LeavesData(pl.LightningDataModule):
             if self.split:
                 self.train_data, self.val_data = random_split(train_dataset, [0.9, 0.1])
             else:
-                self.train_data = train_dataset
-                _, self.val_data = random_split(
-                    ImageFolder(self.train_images_dir, self.trans_predict), [0.9, 0.1]
-                )
+                self.train_data = self.val_data = train_dataset
         if stage == "test":
             self.test_data = ImageFolder(self.train_images_dir, self.trans_predict)
         if stage == "predict":
@@ -69,6 +67,7 @@ class LeavesData(pl.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
+            collate_fn=lambda batch: mixup(*default_collate(batch)),
         )
 
     def val_dataloader(self):

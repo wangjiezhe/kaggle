@@ -7,24 +7,25 @@ import torch.nn.functional as F
 from torch import nn
 from torchmetrics import Accuracy, ConfusionMatrix
 from torchvision import models
+from utils import cutmix_or_mixup, NUM_CLASSES
 
 
 class Classifier(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.output_size = 176
-        self.train_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
-        self.val_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
-        self.test_top1_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro")
-        self.test_top2_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=2)
-        self.test_top5_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=5)
-        self.test_top9_acc = Accuracy("multiclass", num_classes=self.output_size, average="micro", top_k=9)
+
+        # self.train_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
+        self.val_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
+        self.test_top1_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro")
+        self.test_top2_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=2)
+        self.test_top5_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=5)
+        self.test_top9_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=9)
         self.predict_labels = []
-        self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=self.output_size)
+        self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=NUM_CLASSES)
         self.translation_map = None
 
-    def on_train_epoch_start(self):
-        self.train_acc.reset()
+    # def on_train_epoch_start(self):
+    #     self.train_acc.reset()
 
     def on_validation_epoch_start(self):
         self.val_acc.reset()
@@ -38,12 +39,18 @@ class Classifier(pl.LightningModule):
 
     def training_step(self, batch):
         features, labels = batch
+        # features, labels = cutmix_or_mixup(*batch)
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
-        with torch.no_grad():
-            acc = self.train_acc(preds, labels)
-            self.log_dict({"train_loss": loss, "train_acc": acc}, prog_bar=True)
+        self.log("train_loss", loss, prog_bar=True)
         return loss
+
+    # def on_train_batch_end(self, outputs, batch, batch_idx):
+    #     features, labels = batch
+    #     with torch.no_grad():
+    #         preds = self(features)
+    #     acc = self.train_acc(preds, labels)
+    #     self.log_dict({"train_loss": outputs["loss"], "train_acc": acc}, prog_bar=True)
 
     def validation_step(self, batch):
         features, labels = batch
@@ -77,7 +84,7 @@ class Classifier(pl.LightningModule):
         self.logger.log_hyperparams(
             self.hparams,
             {
-                "hp/train_acc": self.train_acc.compute(),
+                # "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
                 "hp/test_acc": self.test_top1_acc.compute(),
             },
@@ -88,7 +95,7 @@ class Classifier(pl.LightningModule):
         errors.fill_diagonal_(0)
         values, indices = errors.view(-1).topk(20)
         values, indices = values.tolist(), indices.tolist()
-        real_indicies = [(i // self.output_size, i % self.output_size) for i in indices]
+        real_indicies = [(i // NUM_CLASSES, i % NUM_CLASSES) for i in indices]
 
         label_map = self.trainer.datamodule.label_map
         if not self.translation_map:
@@ -144,29 +151,27 @@ class DefinedNet(Classifier):
             case "fc":
                 # ResNet, RegNet, ResNeXt, Inception, GoogleNet, ShuffleNet
                 assert isinstance(self.net.fc, nn.Linear)
-                self.net.fc = nn.LazyLinear(self.output_size)
+                self.net.fc = nn.LazyLinear(NUM_CLASSES)
             case "classifier":
                 if isinstance(self.net.classifier, nn.Linear):
                     # DenseNet
-                    self.net.classifier = nn.LazyLinear(self.output_size)
+                    self.net.classifier = nn.LazyLinear(NUM_CLASSES)
                 elif isinstance(self.net.classifier[-1], nn.Linear):
                     # VGG, ConvNeXt[2022], EfficientNet, AlexNet, MNASNet, MobileNet
-                    self.net.classifier[-1] = nn.LazyLinear(self.output_size)
+                    self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
                 else:
                     # SqueezeNet
                     assert layers == ["features", "classifier"]
                     assert len(self.net.classifier) == 4
-                    self.net.classifier[1] = nn.LazyConv2d(
-                        self.output_size, kernel_size=(1, 1), stride=(1, 1)
-                    )
+                    self.net.classifier[1] = nn.LazyConv2d(NUM_CLASSES, kernel_size=(1, 1), stride=(1, 1))
             case "head":
                 # Swin
                 assert isinstance(self.net.heads, nn.Linear)
-                self.net.head = nn.LazyLinear(self.output_size)
+                self.net.head = nn.LazyLinear(NUM_CLASSES)
             case "heads":
                 # ViT
                 assert isinstance(self.net.heads, nn.Linear)
-                self.net.heads = nn.LazyLinear(self.output_size)
+                self.net.heads = nn.LazyLinear(NUM_CLASSES)
             case _:
                 raise ValueError(f"{resnet.__name__} cannot be converted")
 
@@ -196,7 +201,7 @@ class ResNet(Classifier):
 
         self.net = resnet(weights=weights)
         assert isinstance(self.net.fc, nn.Linear)
-        self.net.fc = nn.LazyLinear(self.output_size)
+        self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
@@ -216,8 +221,8 @@ class ResNet(Classifier):
 
 
 class ResNet_pretrained(ResNet):
-    def __init__(self):
-        super().__init__(weights="DEFAULT")
+    def __init__(self, resnet):
+        super().__init__(resnet, weights="DEFAULT")
 
 
 RegNet = ResNet
@@ -240,7 +245,7 @@ class DenseNet(Classifier):
 
         self.net = resnet(weights=weights)
         assert isinstance(self.net.classifier, nn.Linear)
-        self.net.classifier = nn.LazyLinear(self.output_size)
+        self.net.classifier = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
@@ -271,7 +276,7 @@ class AlexNet(Classifier):
         self.net = resnet(weights=weights)
         assert isinstance(self.net.classifier[-1], nn.Linear)
         # VGG, ConvNeXt[2022], EfficientNet, AlexNet, MNASNet, MobileNet
-        self.net.classifier[-1] = nn.LazyLinear(self.output_size)
+        self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
@@ -308,7 +313,7 @@ class ViT(Classifier):
 
         self.net = resnet(weights=weights)
         assert isinstance(self.net.heads, nn.Linear)
-        self.net.heads = nn.LazyLinear(self.output_size)
+        self.net.heads = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
