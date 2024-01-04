@@ -10,7 +10,7 @@ def read_file(file_path):
 
 
 def write_csv(english_names, chinese_names, output_path):
-    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+    with open(output_path, "w", newline="\n", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["英文名", "中文名"])
 
@@ -20,7 +20,7 @@ def write_csv(english_names, chinese_names, output_path):
 
 def main():
     english_file_path = "english_name.txt"
-    chinese_file_path = "chinese_name2.txt"
+    chinese_file_path = "chinese_name.txt"
     output_csv_path = "../plant_name.csv"
 
     current_directory = os.path.dirname(os.path.abspath(__file__))
