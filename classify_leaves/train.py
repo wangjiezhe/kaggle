@@ -7,6 +7,7 @@ from model import *
 from pytorch_lightning.loggers import TensorBoardLogger
 from torchvision import models
 from torchvision.transforms import v2
+from utils import *
 
 torch.set_float32_matmul_precision("high")
 
@@ -32,11 +33,12 @@ def train(
     num_workers=8,
     aug=train_aug,
     split=True,
+    mix=None,
     test=True,
     predict=False,
     **kwargs
 ):
-    data = LeavesData(batch_size=batch_size, num_workers=num_workers, aug=aug, split=split)
+    data = LeavesData(batch_size=batch_size, num_workers=num_workers, aug=aug, split=split, mix=mix)
     if load_path is not None:
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint["state_dict"], strict=False)

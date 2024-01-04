@@ -7,7 +7,6 @@ from PIL import Image
 from torch.utils.data import DataLoader, default_collate, random_split, TensorDataset
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2
-from utils import mixup
 
 
 class LeavesData(pl.LightningDataModule):
@@ -20,15 +19,17 @@ class LeavesData(pl.LightningDataModule):
         train_images_dir="images_cleaned_train",
         split=True,
         normalize=True,
+        mix=None,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["aug"])
+        self.save_hyperparameters(ignore=["aug", "mix"])
         self.data_dir = data_dir
         self.train_images_dir = os.path.join(data_dir, train_images_dir)
         self.predict_csv = os.path.join(data_dir, "test.csv")
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.split = split
+        self.mix = mix
         trans = v2.Compose([v2.PILToTensor(), v2.ToDtype(torch.float32, scale=True)])
         self.trans_predict = (
             v2.Compose([trans, v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
@@ -61,13 +62,18 @@ class LeavesData(pl.LightningDataModule):
         return img_tensor
 
     def train_dataloader(self):
+        if self.mix is not None:
+            collate_fn = lambda batch: self.mix(*default_collate(batch))
+        else:
+            collate_fn = None
+
         return DataLoader(
             self.train_data,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
-            collate_fn=lambda batch: mixup(*default_collate(batch)),
+            collate_fn=collate_fn,
         )
 
     def val_dataloader(self):
