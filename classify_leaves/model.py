@@ -20,7 +20,6 @@ class Classifier(pl.LightningModule):
         self.test_top2_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=2)
         self.test_top5_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=5)
         self.test_top9_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=9)
-        self.predict_labels = []
         self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=NUM_CLASSES)
         self.translation_map = None
 
@@ -120,20 +119,25 @@ class Classifier(pl.LightningModule):
 
     def predict_step(self, batch):
         features = batch[0]
-        labels = self(features).argmax(axis=1)
-        self.predict_labels.extend(labels.tolist())
+        preds = self(features).argmax(axis=1)
+        return preds
 
     def on_predict_end(self):
         submission = pd.concat(
             [
                 self.trainer.datamodule.predict_images,
-                pd.Series([self.trainer.datamodule.label_map[i] for i in self.predict_labels], name="label"),
+                pd.Series(
+                    [
+                        self.trainer.datamodule.label_map[i]
+                        for i in torch.stack(self.trainer.predict_loop.predictions).view(-1).tolist()
+                    ],
+                    name="label",
+                ),
             ],
             axis=1,
         )
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         submission.to_csv(f"submission_{now}.csv", index=False)
-        self.predict_labels.clear()
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())
