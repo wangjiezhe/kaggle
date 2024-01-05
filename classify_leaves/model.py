@@ -21,7 +21,6 @@ class Classifier(pl.LightningModule):
         self.test_top5_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=5)
         self.test_top9_acc = Accuracy("multiclass", num_classes=NUM_CLASSES, average="micro", top_k=9)
         self.confusion_matrix = ConfusionMatrix("multiclass", num_classes=NUM_CLASSES)
-        self.translation_map = None
 
     def on_train_epoch_start(self):
         self.train_acc.reset()
@@ -41,7 +40,7 @@ class Classifier(pl.LightningModule):
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
         metric = {"train_loss": loss}
-        if self.trainer.datamodule.mix is None:
+        if self.trainer.datamodule.mix is None:  # type: ignore
             with torch.no_grad():
                 metric["train_acc"] = self.train_acc(preds, labels)
         self.log_dict(metric, prog_bar=True)
@@ -75,9 +74,9 @@ class Classifier(pl.LightningModule):
         )
         return loss
 
-    def on_test_end(self):
-        self.logger.log_hyperparams(
-            self.hparams,
+    def on_test_epoch_end(self):
+        self.logger.log_hyperparams(  # type: ignore
+            self.hparams,  # type: ignore
             {
                 "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
@@ -95,12 +94,14 @@ class Classifier(pl.LightningModule):
 
 
 class DefinedNet(Classifier):
-    def __init__(self, resnet, weights=None):
+    def __init__(self, model: str, weights=None):
         super().__init__()
-        self.save_hyperparameters(ignore=["resnet"])
-        self.pretrained = True if weights else False
+        self.save_hyperparameters()
 
-        self.net = resnet(weights=weights)
+        available_models = models.list_models()
+        if model not in available_models:
+            raise ValueError(f"{model} should be one of {available_models}.")
+        self.net = models.get_model(model, weights=weights)
         layers = [k for k, _ in self.net.named_children()]
         match layers[-1]:
             case "fc":
@@ -128,160 +129,61 @@ class DefinedNet(Classifier):
                 assert isinstance(self.net.heads, nn.Linear)
                 self.net.heads = nn.LazyLinear(NUM_CLASSES)
             case _:
-                raise ValueError(f"{resnet.__name__} cannot be converted")
+                raise ValueError(f"{model} cannot be converted")
 
     def forward(self, X):
         return self.net(X)
 
-    ## FIXME
     def configure_optimizers(self):
-        if self.pretrained:
-            params_1x = [
-                param
-                for name, param in self.named_parameters()
-                if name not in ["net.fc.weight", "net.fc.bias"]
-            ]
-            return torch.optim.AdamW(
-                [{"params": params_1x, "lr": 0.0001}, {"params": self.net.fc.parameters(), "lr": 0.001}]
-            )
-        else:
-            return torch.optim.AdamW(self.parameters())
+        torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
 
 
 class ResNet(Classifier):
-    def __init__(self, resnet, weights=None):
+    def __init__(self, model: str, weights=None):
+        available_models = [m for m in models.list_models() if m.startswith("resnet")]
+        if model not in available_models:
+            raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
-        self.save_hyperparameters(ignore=["resnet"])
-        self.pretrained = True if weights else False
-
-        self.net = resnet(weights=weights)
-        assert isinstance(self.net.fc, nn.Linear)
+        self.save_hyperparameters()
+        self.net = models.get_model(model, weights=weights)
         self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
 
     def configure_optimizers(self):
-        if self.pretrained:
-            params_1x = [
-                param
-                for name, param in self.named_parameters()
-                if name not in ["net.fc.weight", "net.fc.bias"]
-            ]
-            return torch.optim.AdamW(
-                [{"params": params_1x, "lr": 0.0001}, {"params": self.net.fc.parameters(), "lr": 0.001}]
-            )
-        else:
-            return torch.optim.AdamW(self.parameters())
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
 
 
-class ResNet_pretrained(ResNet):
-    def __init__(self, resnet):
-        super().__init__(resnet, weights="DEFAULT")
-
-
-RegNet = ResNet
-ResNeXt = ResNet
-Inception = ResNet
-GoogleNet = ResNet
-ShuffleNet = ResNet
-RegNet_pretrained = ResNet_pretrained
-ResNeXt_pretrained = ResNet_pretrained
-Inception_pretrained = ResNet_pretrained
-GoogleNet_pretrained = ResNet_pretrained
-ShuffleNet_pretrained = ResNet_pretrained
-
-
-class DenseNet(Classifier):
-    def __init__(self, resnet, weights=None):
+class RegNet(Classifier):
+    def __init__(self, model: str, weights=None):
+        available_models = [m for m in models.list_models() if m.startswith("regnet")]
+        if model not in available_models:
+            raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
-        self.save_hyperparameters(ignore=["resnet"])
-        self.pretrained = True if weights else False
-
-        self.net = resnet(weights=weights)
-        assert isinstance(self.net.classifier, nn.Linear)
-        self.net.classifier = nn.LazyLinear(NUM_CLASSES)
+        self.save_hyperparameters()
+        self.net = models.get_model(model, weights=weights)
+        self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
 
     def configure_optimizers(self):
-        if self.pretrained:
-            params_1x = [
-                param
-                for name, param in self.named_parameters()
-                if name not in ["net.classifier.weight", "net.classifier.bias"]
-            ]
-            return torch.optim.AdamW(
-                [
-                    {"params": params_1x, "lr": 0.0001},
-                    {"params": self.net.classifier.parameters(), "lr": 0.001},
-                ]
-            )
-        else:
-            return torch.optim.AdamW(self.parameters())
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
 
 
-class AlexNet(Classifier):
-    def __init__(self, resnet, weights=None):
+class ConvNeXt(Classifier):
+    def __init__(self, model: str, weights=None):
+        available_models = [m for m in models.list_models() if m.startswith("convnext")]
+        if model not in available_models:
+            raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
-        self.save_hyperparameters(ignore=["resnet"])
-        self.pretrained = True if weights else False
-
-        self.net = resnet(weights=weights)
-        assert isinstance(self.net.classifier[-1], nn.Linear)
-        # VGG, ConvNeXt[2022], EfficientNet, AlexNet, MNASNet, MobileNet
+        self.save_hyperparameters()
+        self.net = models.get_model(model, weights=weights)
         self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
 
     def forward(self, X):
         return self.net(X)
 
     def configure_optimizers(self):
-        if self.pretrained:
-            params_1x = [
-                param
-                for name, param in self.named_parameters()
-                if name not in ["net.classifier." + k for k, _ in self.net.classifier.named_parameters()]
-            ]
-            return torch.optim.AdamW(
-                [
-                    {"params": params_1x, "lr": 0.0001},
-                    {"params": self.net.classifier.parameters(), "lr": 0.001},
-                ]
-            )
-        else:
-            return torch.optim.AdamW(self.parameters())
-
-
-VGG = AlexNet
-EfficientNet = AlexNet
-MNASNet = AlexNet
-MobileNet = AlexNet
-ConvNeXt = AlexNet
-
-
-class ViT(Classifier):
-    def __init__(self, resnet, weights=None):
-        super().__init__()
-        self.save_hyperparameters(ignore=["resnet"])
-        self.pretrained = True if weights else False
-
-        self.net = resnet(weights=weights)
-        assert isinstance(self.net.heads, nn.Linear)
-        self.net.heads = nn.LazyLinear(NUM_CLASSES)
-
-    def forward(self, X):
-        return self.net(X)
-
-    def configure_optimizers(self):
-        if self.pretrained:
-            params_1x = [
-                param
-                for name, param in self.named_parameters()
-                if name not in ["net.heads.weight", "net.heads.bias"]
-            ]
-            return torch.optim.AdamW(
-                [{"params": params_1x, "lr": 0.0001}, {"params": self.net.heads.parameters(), "lr": 0.001}]
-            )
-        else:
-            return torch.optim.AdamW(self.parameters())
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
