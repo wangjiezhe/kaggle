@@ -53,7 +53,7 @@ class LeavesData(pl.LightningDataModule):
         if stage == "predict":
             self.predict_images = pd.read_csv(self.predict_csv)
             self.predict_data = TensorDataset(
-                torch.stack([self.image_to_tensor(f) for f in self.predict_images["image"].tolist()])
+                torch.stack([self.image_to_tensor(f) for f in self.predict_images["image"].tolist()])  # type: ignore
             )
 
     def image_to_tensor(self, filename):
@@ -63,7 +63,7 @@ class LeavesData(pl.LightningDataModule):
 
     def train_dataloader(self):
         if self.mix is not None:
-            collate_fn = lambda batch: self.mix(*default_collate(batch))
+            collate_fn = lambda batch: self.mix(*default_collate(batch))  # type: ignore
         else:
             collate_fn = None
 
