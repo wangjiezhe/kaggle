@@ -3,6 +3,7 @@
 __pycache__/
 data/
 lightning_logs/
+checkpoints/
 *.py[cod]
 .ipynb_checkpoints
 *.ckpt

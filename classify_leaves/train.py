@@ -6,6 +6,7 @@ from callback import *
 from data import LeavesData
 from model import *
 from pytorch_lightning.loggers import TensorBoardLogger
+from termcolor import colored
 from torchvision import models
 from torchvision.transforms import v2
 from utils import *
@@ -39,7 +40,7 @@ def train(
     mix=None,
     test=True,
     predict=False,
-    **kwargs
+    **kwargs,
 ):
     if checkpoint_path is not None:
         state = torch.load(checkpoint_path)
@@ -52,13 +53,20 @@ def train(
     data = LeavesData(batch_size=batch_size, num_workers=num_workers, aug=aug, split=split, mix=mix)
     logger = TensorBoardLogger(".", default_hp_metric=False, version=logger_version)
 
-    ck = [save_last]
+    model_name = model.hparams.get("model", model.__class__.__name__)
+    if model_name:
+        print(colored(f"Start training {model_name} in {epoch} epoches...", "green"))
+    ck = [save_last(model_name)]
     if test:
-        ck += [analyse_confusion_matrix]
+        ck += [ConfMat()]
     if predict:
-        ck += [save_prediction]
+        ck += [Submission()]
     if best_model:
-        ck += [save_best_train_loss, save_best_val_loss, save_best_val_acc]
+        ck += [
+            save_best_train_loss(model_name),
+            save_best_val_loss(model_name),
+            save_best_val_acc(model_name),
+        ]
     if callbacks:
         if isinstance(callbacks, Callback):
             callbacks = [callbacks]
@@ -86,16 +94,17 @@ def predict(model, batch_size=128, checkpoint_path=None, weights_path=None, writ
         model.load_state_dict(state, strict=False)
     data = LeavesData(batch_size=batch_size)
     logger = TensorBoardLogger(".", default_hp_metric=False)
-    callbacks = [save_prediction] if write else None
+    callbacks = [Submission()] if write else None
     trainer = pl.Trainer(max_epochs=0, logger=logger, callbacks=callbacks)  # type: ignore
     return trainer.predict(model, data)
 
 
 # ResNet18/34: batch_size=128
 # ResNet50, RegNetX_1.6GF: batch_size=64
-# RegNetX_3.2/8GF, RegNetY_3.2GF, ConvNeXt Small: batch_size=32
+# RegNetX_3.2/8GF, RegNetY_3.2GF: batch_size=32
 # RegNetY_8GF: batch_size=24
-# ConvNeXt Base:
+# ConvNeXt Small: batch_size=32 (混合模式)
+# ConvNeXt Base: batch_size=32
 
 
 def train_convnext_1():
@@ -121,7 +130,7 @@ def train_convnext_2():
         split=False,
         best_model=True,
         logger_version="ConvNeXt small - Finetune - Freeze",
-        callbacks=ConvNeXtFineTune(train_bn=True),
+        callbacks=ConvNeXtFineTune(),
     )
 
 
@@ -135,8 +144,22 @@ def train_convnext_3():
         split=False,
         best_model=True,
         logger_version="ConvNeXt small - Freeze - Mixup",
-        callbacks=ConvNeXtFineTune(train_bn=False),
+        callbacks=ConvNeXtFineTune(),
         mix=mixup,
+    )
+
+
+def train_convnext_4():
+    model = ConvNeXt("convnext_tiny", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="ConvNeXt tiny - Freeze",
+        callbacks=ConvNeXtFineTune(),
     )
 
 
@@ -144,20 +167,203 @@ def train_regnet_1():
     model = RegNet("regnet_x_3_2gf", weights="DEFAULT")
     train(
         model,
-        30,
+        20,
         predict=True,
         batch_size=32,
         split=False,
         best_model=True,
         logger_version="RegNetX_3.2GF - Freeze",
-        callbacks=ConvNeXtFineTune(),
+        callbacks=RegNetFineTune(train_bn=False),
+    )
+
+
+def train_regnet_2():
+    model = RegNet("regnet_y_3_2gf", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze",
+        callbacks=RegNetFineTune(train_bn=False),
+    )
+
+
+def train_regnet_3():
+    model = RegNet("regnet_x_1_6gf", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=64,
+        split=False,
+        best_model=True,
+        logger_version="RegNetX_1.6GF - Freeze",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_4():
+    model = RegNet("regnet_y_1_6gf", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_1.6GF - Freeze",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_5():
+    model = RegNet("regnet_x_3_2gf", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetX_3.2GF - Freeze (correct)",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_6():
+    model = RegNet("regnet_y_3_2gf", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze (correct)",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_7():
+    model = RegNet("regnet_y_3_2gf")
+    train(
+        model,
+        20,  # acturally stopped after 10 epoches
+        checkpoint_path="./lightning_logs/RegNetY_3.2GF - Freeze (correct)/checkpoints/regnet_y_3_2gf-epoch=19-step=11220.ckpt",
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze (+20)",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_8():
+    model = RegNet("regnet_y_3_2gf")
+    train(
+        model,
+        10,
+        checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610.ckpt",
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze (20+10+10)",
+        callbacks=RegNetFineTune(train_bn=True),
+    )
+
+
+def train_regnet_9():
+    model = RegNet("regnet_y_3_2gf")
+    train(
+        model,
+        10,
+        checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610-v1.ckpt",
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze (20+10+10+10)",
+        callbacks=RegNetFineTune(unfreeze_at_epoch=0, train_bn=True),
+    )
+
+
+def train_regnet_10():
+    model = RegNet("regnet_y_3_2gf")
+    train(
+        model,
+        10,
+        checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610-v2.ckpt",
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="RegNetY_3.2GF - Freeze (20+10+10+10+10)",
+        callbacks=RegNetFineTune(unfreeze_at_epoch=10, train_bn=True),
+    )
+
+
+def train_resnet_1():
+    model = ResNet("resnet50", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="ResNet50 - Freeze",
+        callbacks=ResNetFineTune(),
+    )
+
+
+def train_resnet_2():
+    model = ResNet("resnet34", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="ResNet34 - Freeze",
+        callbacks=ResNetFineTune(),
+    )
+
+
+def train_resnet_3():
+    model = ResNet("resnet18", weights="DEFAULT")
+    train(
+        model,
+        20,
+        predict=True,
+        batch_size=32,
+        split=False,
+        best_model=True,
+        logger_version="ResNet18 - Freeze",
+        callbacks=ResNetFineTune(),
     )
 
 
 if __name__ == "__main__":
-    # model = ResNet_pretrained(models.regnet_x_3_2gf, models.RegNet_X_3_2GF_Weights.IMAGENET1K_V2)
-    # train(model, 8, predict=True, batch_size=32)
-    model = RegNet("regnet_y_3_2gf", weights="DEFAULT")
-    round = 3
-    for i in range(round):
-        train(model, 4, predict=True, batch_size=32)
+    # train_convnext_1()
+    # train_convnext_2()
+    # train_convnext_3()
+    # train_convnext_4()
+    # train_regnet_1()
+    # train_regnet_2()
+    # train_regnet_3()
+    # train_regnet_4()
+    # train_regnet_5()
+    # train_resnet_1()
+    # train_resnet_2()
+    # train_resnet_3()
+    # train_regnet_6()
+    # train_regnet_7()
+    # train_regnet_8()
+    # train_regnet_9()
+    train_regnet_10()

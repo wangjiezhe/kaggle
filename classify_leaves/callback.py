@@ -65,7 +65,7 @@ class ConfMat(Callback):
 
 
 class ResNetFineTune(BaseFinetuning):
-    def __init__(self, unfreeze_at_epoch=10, train_bn=False):
+    def __init__(self, unfreeze_at_epoch=10, train_bn=True):
         super().__init__()
         self._unfreeze_at_epoch = unfreeze_at_epoch
         self._train_bn = train_bn
@@ -80,72 +80,97 @@ class ResNetFineTune(BaseFinetuning):
             self.unfreeze_and_add_param_group(
                 modules=backbone,
                 optimizer=optimizer,
-                train_bn=True,
+                train_bn=(not self._train_bn),
             )
 
 
 class RegNetFineTune(BaseFinetuning):
-    def __init__(self, unfreeze_at_epoch=10, train_bn=False):
+    def __init__(self, unfreeze_at_epoch=10, train_bn=True):
         super().__init__()
         self._unfreeze_at_epoch = unfreeze_at_epoch
-        self._train_bn = train_bn
+        self._train_bn_when_freezing = train_bn
 
     def freeze_before_training(self, pl_module):
-        self.freeze([pl_module.net.stem, pl_module.net.trunk_output], train_bn=self._train_bn)
+        self.freeze([pl_module.net.stem, pl_module.net.trunk_output], train_bn=self._train_bn_when_freezing)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
         if current_epoch == self._unfreeze_at_epoch:
             self.unfreeze_and_add_param_group(
                 modules=[pl_module.net.stem, pl_module.net.trunk_output],
                 optimizer=optimizer,
-                train_bn=True,
+                train_bn=(not self._train_bn_when_freezing),
             )
 
 
 class ConvNeXtFineTune(BaseFinetuning):
-    def __init__(self, unfreeze_at_epoch=10, train_bn=False):
+    def __init__(self, unfreeze_at_epoch=10):
         super().__init__()
         self._unfreeze_at_epoch = unfreeze_at_epoch
-        self._train_bn = train_bn
 
     def freeze_before_training(self, pl_module):
-        self.freeze(pl_module.net.features, train_bn=self._train_bn)
+        self.freeze(pl_module.net.features)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
         if current_epoch == self._unfreeze_at_epoch:
             self.unfreeze_and_add_param_group(
                 modules=pl_module.net.features,
                 optimizer=optimizer,
-                train_bn=True,
             )
 
 
-save_best_val_acc = ModelCheckpoint(
-    monitor="val_acc",
-    filename="{epoch:02d}-{val_acc:.4f}",
-    save_weights_only=True,
-    mode="max",
-    save_on_train_epoch_end=False,
-    save_top_k=2,
-)
-save_best_val_loss = ModelCheckpoint(
-    monitor="val_loss",
-    filename="{epoch:02d}-{val_loss:.4f}",
-    save_weights_only=True,
-    save_on_train_epoch_end=False,
-    save_top_k=2,
-)
-save_best_train_loss = ModelCheckpoint(
-    monitor="train_loss",
-    filename="{epoch:02d}-{train_loss:.4f}",
-    save_weights_only=True,
-    save_top_k=2,
-)
-save_last = ModelCheckpoint(
-    filename="{epoch:02d}-{step}",
-    save_weights_only=True,
-    save_last=True,
-)
+def save_best_val_acc(prefix):
+    if prefix:
+        filename = f"{prefix}-" + "{epoch:02d}-{val_acc:.4f}"
+    else:
+        filename = "{epoch:02d}-{val_acc:.4f}"
+    return ModelCheckpoint(
+        dirpath="./checkpoints",
+        monitor="val_acc",
+        filename=filename,
+        save_weights_only=True,
+        mode="max",
+        save_on_train_epoch_end=False,
+        save_top_k=2,
+    )
 
-save_prediction = Submission(now=True)
-analyse_confusion_matrix = ConfMat()
+
+def save_best_val_loss(prefix):
+    if prefix:
+        filename = f"{prefix}-" + "{epoch:02d}-{val_loss:.4f}"
+    else:
+        filename = "{epoch:02d}-{val_loss:.4f}"
+    return ModelCheckpoint(
+        dirpath="./checkpoints",
+        filename=filename,
+        monitor="val_loss",
+        save_weights_only=True,
+        save_on_train_epoch_end=False,
+        save_top_k=2,
+    )
+
+
+def save_best_train_loss(prefix):
+    if prefix:
+        filename = f"{prefix}-" + "{epoch:02d}-{train_loss:.4f}"
+    else:
+        filename = "{epoch:02d}-{train_loss:.4f}"
+    return ModelCheckpoint(
+        dirpath="./checkpoints",
+        filename=filename,
+        monitor="train_loss",
+        save_weights_only=True,
+        save_top_k=2,
+    )
+
+
+def save_last(prefix):
+    if prefix:
+        filename = f"{prefix}-" + "{epoch:02d}-{step}"
+    else:
+        filename = "{epoch:02d}-{step}"
+    return ModelCheckpoint(
+        dirpath="./checkpoints",
+        filename=filename,
+        save_weights_only=True,
+        save_last=True,
+    )
