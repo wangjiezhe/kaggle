@@ -37,7 +37,7 @@ class Classifier(pl.LightningModule):
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
         metric = {"train_loss": loss}
-        if self.trainer.datamodule.mix is None:  # type: ignore
+        if self.trainer.datamodule.mix is None:
             with torch.no_grad():
                 metric["train_acc"] = self.train_acc(preds, labels)
         self.log_dict(metric, prog_bar=True)
@@ -72,8 +72,8 @@ class Classifier(pl.LightningModule):
         return loss
 
     def on_test_epoch_end(self):
-        self.logger.log_hyperparams(  # type: ignore
-            self.hparams,  # type: ignore
+        self.logger.log_hyperparams(
+            self.hparams,
             {
                 "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
@@ -82,7 +82,7 @@ class Classifier(pl.LightningModule):
         )
 
     def predict_step(self, batch):
-        features = batch[0]
+        features = batch
         preds = self(features).argmax(axis=1)
         return preds
 
@@ -137,7 +137,7 @@ class DefinedNet(Classifier):
 
 class ResNet(Classifier):
     def __init__(self, model: str, weights=None):
-        available_models = [m for m in models.list_models() if m.startswith("resnet")]
+        available_models = models.list_models(include="resnet*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
@@ -154,7 +154,7 @@ class ResNet(Classifier):
 
 class RegNet(Classifier):
     def __init__(self, model: str, weights=None):
-        available_models = [m for m in models.list_models() if m.startswith("regnet")]
+        available_models = models.list_models(include="regnet*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
@@ -171,7 +171,7 @@ class RegNet(Classifier):
 
 class ConvNeXt(Classifier):
     def __init__(self, model: str, weights=None):
-        available_models = [m for m in models.list_models() if m.startswith("convnext")]
+        available_models = models.list_models(include="convnext*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
         super().__init__()
