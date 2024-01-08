@@ -6,6 +6,8 @@ from torchmetrics import Accuracy, ConfusionMatrix
 from torchvision import models
 from utils import NUM_CLASSES
 
+__all__ = ["Classifier", "Resnet", "RegNet", "ConvNeXt", "DefinedNet"]
+
 
 class Classifier(pl.LightningModule):
     def __init__(self):

@@ -3,11 +3,12 @@ import os.path
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from PIL import Image
 from torch.utils.data import DataLoader, default_collate, random_split
 from torchvision.datasets import ImageFolder, VisionDataset
 from torchvision.datasets.folder import default_loader
 from torchvision.transforms import v2
+
+__all__ = ["PredictDataset", "Cifar10Data"]
 
 
 class PredictDataset(VisionDataset):
