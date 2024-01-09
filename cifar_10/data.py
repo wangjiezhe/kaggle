@@ -1,4 +1,6 @@
 import os.path
+from math import ceil
+from typing import Callable, Optional
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -8,7 +10,7 @@ from torchvision.datasets import ImageFolder, VisionDataset
 from torchvision.datasets.folder import default_loader
 from torchvision.transforms import v2
 
-__all__ = ["PredictDataset", "Cifar10Data"]
+__all__ = ["PredictDataset", "Cifar10Data", "ResizedCifar10Data"]
 
 
 class PredictDataset(VisionDataset):
@@ -38,6 +40,7 @@ class Cifar10Data(pl.LightningDataModule):
         train_images_dirname="train",
         predict_images_dirname="test",
         split=True,
+        split_random=False,
         valid_ratio=0.1,
         mix=None,
     ):
@@ -50,6 +53,7 @@ class Cifar10Data(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.split = split
+        self.split_random = split_random
         self.mix = mix
         self.valid_ratio = valid_ratio
         self.trans_predict = v2.Compose(
@@ -77,9 +81,17 @@ class Cifar10Data(pl.LightningDataModule):
             train_dataset = ImageFolder(self.train_images_dir, self.trans_train)
             if self.split:
                 assert 0.0 < self.valid_ratio < 1.0
-                self.train_data, self.val_data = random_split(
-                    train_dataset, [1.0 - self.valid_ratio, self.valid_ratio]
-                )
+                if self.split_random:
+                    self.train_data, self.val_data = random_split(
+                        train_dataset,
+                        [1.0 - self.valid_ratio, self.valid_ratio],
+                    )
+                else:
+                    self.train_data, self.val_data = random_split(
+                        train_dataset,
+                        [1.0 - self.valid_ratio, self.valid_ratio],
+                        generator=torch.Generator().manual_seed(42),
+                    )
             else:
                 self.train_data = self.val_data = train_dataset
         if stage == "test":
@@ -127,4 +139,27 @@ class Cifar10Data(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
+        )
+
+
+class ResizedCifar10Data(Cifar10Data):
+    def __init__(self, resize=96, batch_size=128, num_workers=8, split=True, split_random=False, mix=None):
+        super().__init__(
+            batch_size=batch_size, num_workers=num_workers, split=split, split_random=split_random, mix=mix
+        )
+        self.trans_predict = v2.Compose(
+            [
+                v2.Resize(resize),
+                v2.PILToTensor(),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
+        self.trans_train = v2.Compose(
+            [
+                v2.Resize(ceil(resize / 0.8)),
+                v2.RandomResizedCrop(resize, scale=(0.64, 1), ratio=(1.0, 1.0)),
+                v2.RandomHorizontalFlip(),
+                self.trans_predict,
+            ]
         )

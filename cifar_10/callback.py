@@ -1,3 +1,5 @@
+import logging
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -8,7 +10,7 @@ from utils import NUM_CLASSES
 
 __all__ = [
     "Submission",
-    "ConfMat",
+    "ConfMatTop20",
     "ResNetFineTune",
     "RegNetFineTune",
     "ConvNeXtFineTune",
@@ -17,6 +19,8 @@ __all__ = [
     "save_best_val_loss",
     "save_last",
 ]
+
+log = logging.getLogger(__name__)
 
 
 class Submission(BasePredictionWriter):
@@ -32,7 +36,7 @@ class Submission(BasePredictionWriter):
             [
                 imgs,
                 pd.Series(
-                    [data.label_map[i] for i in torch.stack(predictions).view(-1).tolist()],
+                    [data.label_map[i] for row in predictions for i in row],
                     name="label",
                 ),
             ],
@@ -42,11 +46,13 @@ class Submission(BasePredictionWriter):
             now = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_name = f"submission_{now}.csv"
         else:
+            if os.path.exists("submission.csv"):
+                os.rename("submission.csv", "submission_old.csv")
             file_name = "submission.csv"
         submission.to_csv(file_name, index=False)
 
 
-class ConfMat(Callback):
+class ConfMatTop20(Callback):
     def __init__(self):
         super().__init__()
 
@@ -76,26 +82,34 @@ class ConfMat(Callback):
 
 
 class ResNetFineTune(BaseFinetuning):
-    def __init__(self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None, train_bn=True):
+    def __init__(
+        self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None, train_bn=True, verbose=False
+    ):
         super().__init__()
-        self._unfreeze_at_epoch = unfreeze_at_epoch
-        self._freeze_again_at_epoch = freeze_again_at_epoch
-        self._train_bn = train_bn
+        self.unfreeze_at_epoch = unfreeze_at_epoch
+        self.freeze_again_at_epoch = freeze_again_at_epoch
+        self.train_bn = train_bn
+        self.verbose = verbose
 
     def freeze_before_training(self, pl_module):
         backbone = [pl_module.net.get_submodule(k) for k, _ in pl_module.net.named_children() if k != "fc"]
-        self.freeze(backbone, train_bn=self._train_bn)
+        self.freeze(backbone, train_bn=self.train_bn)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
         backbone = [pl_module.net.get_submodule(k) for k, _ in pl_module.net.named_children() if k != "fc"]
-        if current_epoch == self._unfreeze_at_epoch:
+        if current_epoch == self.unfreeze_at_epoch:
             self.unfreeze_and_add_param_group(
                 modules=backbone,
                 optimizer=optimizer,
-                train_bn=(not self._train_bn),
+                train_bn=(not self.train_bn),
             )
-        elif self._unfreeze_at_epoch is not None and current_epoch == self._freeze_again_at_epoch:
-            optimizer.param_group.pop()
+            if self.verbose:
+                log.info(
+                    f"Current lr: {optimizer.param_groups[0]['lr']}, "
+                    f"Backbone lr: {optimizer.param_groups[1]['lr']}"
+                )
+        elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
+            optimizer.param_groups.pop()
 
 
 class RegNetFineTune(BaseFinetuning):
@@ -116,7 +130,7 @@ class RegNetFineTune(BaseFinetuning):
                 train_bn=(not self._train_bn_when_freezing),
             )
         elif self._unfreeze_at_epoch is not None and current_epoch == self._freeze_again_at_epoch:
-            optimizer.param_group.pop()
+            optimizer.param_groups.pop()
 
 
 class ConvNeXtFineTune(BaseFinetuning):
@@ -135,7 +149,7 @@ class ConvNeXtFineTune(BaseFinetuning):
                 optimizer=optimizer,
             )
         elif self._unfreeze_at_epoch is not None and current_epoch == self._freeze_again_at_epoch:
-            optimizer.param_group.pop()
+            optimizer.param_groups.pop()
 
 
 def save_best_val_acc(prefix, dirpath=None):

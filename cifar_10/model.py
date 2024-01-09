@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -6,7 +8,7 @@ from torchmetrics import Accuracy, ConfusionMatrix
 from torchvision import models
 from utils import NUM_CLASSES
 
-__all__ = ["Classifier", "Resnet", "RegNet", "ConvNeXt", "DefinedNet"]
+__all__ = ["Classifier", "DefinedNet", "PretrainedNet", "ResNet", "RegNet", "ConvNeXt"]
 
 
 class Classifier(pl.LightningModule):
@@ -44,6 +46,10 @@ class Classifier(pl.LightningModule):
                 metric["train_acc"] = self.train_acc(preds, labels)
         self.log_dict(metric, prog_bar=True)
         return loss
+
+    def on_train_epoch_end(self):
+        if self.trainer.datamodule.mix is None:
+            self.log_dict({"train_epoch_acc": self.train_acc.compute()})
 
     def validation_step(self, batch):
         features, labels = batch
@@ -86,20 +92,56 @@ class Classifier(pl.LightningModule):
     def predict_step(self, batch):
         features = batch
         preds = self(features).argmax(axis=1)
-        return preds
+        return preds.tolist()
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())
 
 
 class DefinedNet(Classifier):
-    def __init__(self, model: str, weights=None):
+    def __init__(self, model: str, pretrained=False, use_timm=False):
+        super().__init__()
+        self.save_hyperparameters()
+        if use_timm:
+            import timm
+
+            available_models = timm.list_models()
+            if model not in available_models:
+                raise ValueError(f"{model} should be one of {available_models}.")
+            self.backbone = timm.create_model(model, pretrained=pretrained)
+        else:
+            available_models = models.list_models()
+            if model not in available_models:
+                raise ValueError(f"{model} should be one of {available_models}.")
+            weights = "DEFAULT" if pretrained else None
+            self.backbone = models.get_model(model, weights=weights)
+        self.classifier = nn.Sequential(
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.LazyLinear(256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.LazyLinear(NUM_CLASSES),
+        )
+
+    def forward(self, X):
+        y = self.backbone(X)
+        y = self.classifier(y)
+        return y
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+
+
+class PretrainedNet(Classifier):
+    def __init__(self, model: str, pretrained=False):
         super().__init__()
         self.save_hyperparameters()
 
         available_models = models.list_models()
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
+        weights = "DEFAULT" if pretrained else None
         self.net = models.get_model(model, weights=weights)
         layers = [k for k, _ in self.net.named_children()]
         match layers[-1]:
@@ -134,16 +176,17 @@ class DefinedNet(Classifier):
         return self.net(X)
 
     def configure_optimizers(self):
-        torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
 
 
 class ResNet(Classifier):
-    def __init__(self, model: str, weights=None):
+    def __init__(self, model: str, pretrained=False):
+        super().__init__()
+        self.save_hyperparameters()
         available_models = models.list_models(include="resnet*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
-        super().__init__()
-        self.save_hyperparameters()
+        weights = "DEFAULT" if pretrained else None
         self.net = models.get_model(model, weights=weights)
         self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
@@ -155,29 +198,47 @@ class ResNet(Classifier):
 
 
 class RegNet(Classifier):
-    def __init__(self, model: str, weights=None):
+    def __init__(self, model: str, pretrained=False, cosine_t_max: Optional[int] = None, **kwargs):
+        super().__init__()
+        self.save_hyperparameters()
+        self.cosine_t_max = cosine_t_max
+        self.pretrained = pretrained
         available_models = models.list_models(include="regnet*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
-        super().__init__()
-        self.save_hyperparameters()
-        self.net = models.get_model(model, weights=weights)
-        self.net.fc = nn.LazyLinear(NUM_CLASSES)
+        if self.pretrained:
+            self.net = models.get_model(model, weights="DEFAULT", **kwargs)
+            self.net.fc = nn.LazyLinear(NUM_CLASSES)
+        else:
+            self.net = models.get_model(model, num_classes=NUM_CLASSES, **kwargs)
 
     def forward(self, X):
         return self.net(X)
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        if self.pretrained:
+            return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        else:
+            optimizer = torch.optim.AdamW(self.parameters())
+            if self.cosine_t_max:
+                return {
+                    "optimizer": optimizer,
+                    "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+                        optimizer, self.cosine_t_max, eta_min=0.0001
+                    ),
+                }
+            else:
+                return optimizer
 
 
 class ConvNeXt(Classifier):
-    def __init__(self, model: str, weights=None):
+    def __init__(self, model: str, pretrained=False):
+        super().__init__()
+        self.save_hyperparameters()
         available_models = models.list_models(include="convnext*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
-        super().__init__()
-        self.save_hyperparameters()
+        weights = "DEFAULT" if pretrained else None
         self.net = models.get_model(model, weights=weights)
         self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
 

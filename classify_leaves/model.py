@@ -132,7 +132,7 @@ class DefinedNet(Classifier):
         return self.net(X)
 
     def configure_optimizers(self):
-        torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
 
 
 class ResNet(Classifier):
