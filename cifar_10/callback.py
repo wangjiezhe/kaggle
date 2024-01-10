@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Optional
 
 import pandas as pd
-import torch
 from pytorch_lightning.callbacks import BaseFinetuning, BasePredictionWriter, Callback, ModelCheckpoint
+from torchinfo import summary
 from utils import NUM_CLASSES
 
 __all__ = [
@@ -53,9 +53,6 @@ class Submission(BasePredictionWriter):
 
 
 class ConfMatTop20(Callback):
-    def __init__(self):
-        super().__init__()
-
     def on_test_epoch_end(self, trainer, pl_module):
         confmat = pl_module.confusion_matrix.compute()
         errors = confmat.clone()
@@ -88,12 +85,12 @@ class ResNetFineTune(BaseFinetuning):
         super().__init__()
         self.unfreeze_at_epoch = unfreeze_at_epoch
         self.freeze_again_at_epoch = freeze_again_at_epoch
-        self.train_bn = train_bn
+        self.train_bn_when_freezing = train_bn
         self.verbose = verbose
 
     def freeze_before_training(self, pl_module):
         backbone = [pl_module.net.get_submodule(k) for k, _ in pl_module.net.named_children() if k != "fc"]
-        self.freeze(backbone, train_bn=self.train_bn)
+        self.freeze(backbone, train_bn=self.train_bn_when_freezing)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
         backbone = [pl_module.net.get_submodule(k) for k, _ in pl_module.net.named_children() if k != "fc"]
@@ -101,7 +98,7 @@ class ResNetFineTune(BaseFinetuning):
             self.unfreeze_and_add_param_group(
                 modules=backbone,
                 optimizer=optimizer,
-                train_bn=(not self.train_bn),
+                train_bn=(not self.train_bn_when_freezing),
             )
             if self.verbose:
                 log.info(
@@ -109,46 +106,51 @@ class ResNetFineTune(BaseFinetuning):
                     f"Backbone lr: {optimizer.param_groups[1]['lr']}"
                 )
         elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
+            self.freeze(backbone, train_bn=self.train_bn_when_freezing)
             optimizer.param_groups.pop()
 
 
 class RegNetFineTune(BaseFinetuning):
     def __init__(self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None, train_bn=True):
         super().__init__()
-        self._unfreeze_at_epoch = unfreeze_at_epoch
-        self._freeze_again_at_epoch = freeze_again_at_epoch
-        self._train_bn_when_freezing = train_bn
+        self.unfreeze_at_epoch = unfreeze_at_epoch
+        self.freeze_again_at_epoch = freeze_again_at_epoch
+        self.train_bn_when_freezing = train_bn
 
     def freeze_before_training(self, pl_module):
-        self.freeze([pl_module.net.stem, pl_module.net.trunk_output], train_bn=self._train_bn_when_freezing)
+        self.freeze([pl_module.net.stem, pl_module.net.trunk_output], train_bn=self.train_bn_when_freezing)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
-        if current_epoch == self._unfreeze_at_epoch:
+        if current_epoch == self.unfreeze_at_epoch:
             self.unfreeze_and_add_param_group(
                 modules=[pl_module.net.stem, pl_module.net.trunk_output],
                 optimizer=optimizer,
-                train_bn=(not self._train_bn_when_freezing),
+                train_bn=(not self.train_bn_when_freezing),
             )
-        elif self._unfreeze_at_epoch is not None and current_epoch == self._freeze_again_at_epoch:
+        elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
+            self.freeze(
+                [pl_module.net.stem, pl_module.net.trunk_output], train_bn=self.train_bn_when_freezing
+            )
             optimizer.param_groups.pop()
 
 
 class ConvNeXtFineTune(BaseFinetuning):
     def __init__(self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None):
         super().__init__()
-        self._unfreeze_at_epoch = unfreeze_at_epoch
-        self._freeze_again_at_epoch = freeze_again_at_epoch
+        self.unfreeze_at_epoch = unfreeze_at_epoch
+        self.freeze_again_at_epoch = freeze_again_at_epoch
 
     def freeze_before_training(self, pl_module):
         self.freeze(pl_module.net.features)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
-        if current_epoch == self._unfreeze_at_epoch:
+        if current_epoch == self.unfreeze_at_epoch:
             self.unfreeze_and_add_param_group(
                 modules=pl_module.net.features,
                 optimizer=optimizer,
             )
-        elif self._unfreeze_at_epoch is not None and current_epoch == self._freeze_again_at_epoch:
+        elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
+            self.freeze(pl_module.net.features)
             optimizer.param_groups.pop()
 
 
@@ -208,3 +210,18 @@ def save_last(prefix, dirpath=None):
         save_weights_only=True,
         save_last=True,
     )
+
+
+class LayerSummary(Callback):
+    def __init__(self, depth=3):
+        self.depth = depth
+
+    def on_fit_start(self, trainer, pl_module):
+        batch, _ = next(iter(trainer.datamodule.val_dataloader()))
+        batch = batch.to(pl_module.device)
+        summary(
+            pl_module,
+            input_data=batch,
+            col_names=("input_size", "output_size", "num_params", "mult_adds"),
+            depth=self.depth,
+        )
