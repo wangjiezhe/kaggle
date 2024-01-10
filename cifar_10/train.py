@@ -1,19 +1,19 @@
 #!/usr/bin/python3
 
+import re
 from typing import Callable, List, Optional, Union
 
 import pytorch_lightning as pl
 import torch
 from callback import *
+from callback import LayerSummary
 from data import *
 from model import *
 from pytorch_lightning.callbacks import BackboneFinetuning, Callback
 from pytorch_lightning.loggers import TensorBoardLogger
 from termcolor import colored
 from torchinfo import summary
-from torchvision import models
 from torchvision.ops import Conv2dNormActivation
-from torchvision.transforms import v2
 from utils import *
 
 torch.set_float32_matmul_precision("medium")
@@ -96,10 +96,12 @@ def train(
     if predict:
         trainer.predict(model, data)
         if best_model:
-            trainer.predict(model, data, ckpt_path=best_val_acc.best_model_path)
+            best_val_acc_epoch = int(re.findall("epoch=(\d+)", best_val_acc.best_model_path)[0])
+            if best_val_acc_epoch < trainer.current_epoch - 1:
+                trainer.predict(model, data, ckpt_path=best_val_acc.best_model_path)
 
 
-def predict(model, batch_size=128, checkpoint_path=None, weights_path=None, write=True):
+def predict(model, data=None, batch_size=128, checkpoint_path=None, weights_path=None, write=True):
     if isinstance(model, str):
         model = DefinedNet(model)
     if checkpoint_path is not None:
@@ -109,7 +111,8 @@ def predict(model, batch_size=128, checkpoint_path=None, weights_path=None, writ
         state = torch.load(weights_path)
         assert "state_dict" not in state.keys()
         model.load_state_dict(state, strict=False)
-    data = Cifar10Data(batch_size=batch_size)
+    if data is None:
+        data = Cifar10Data(batch_size=batch_size)
     callbacks = [Submission()] if write else None
     trainer = pl.Trainer(max_epochs=0, logger=False, callbacks=callbacks)
     return trainer.predict(model, data)
@@ -334,7 +337,20 @@ def train_regnetx_3():
 
 def train_regnetx_4():
     model = RegNet("regnet_x_3_2gf")
-    train(model, 100, logger_version="RegNetX_3.2GF_resize96", mix=cutmix_or_mixup)
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    train(model, 100, data=data, logger_version="RegNetX_3.2GF_resize96")
+
+
+def train_regnetx_4_1():
+    model = RegNet("regnet_x_3_2gf")
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    train(
+        model,
+        100,
+        data=data,
+        logger_version="RegNetX_3.2GF_resize96_2",
+        checkpoint_path="./lightning_logs/RegNetX_3.2GF_resize96/checkpoints/regnet_x_3_2gf-epoch=99-step=35200.ckpt",
+    )
 
 
 def train_regnetx_5():
@@ -347,6 +363,82 @@ def train_regnetx_5():
         split=True,
         split_random=False,
         mix=cutmix_or_mixup,
+    )
+
+
+def train_regnetx_6():
+    model = RegNet("regnet_x_3_2gf", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    train(
+        model,
+        100,
+        data=data,
+        callbacks=ResNetFineTune(10, 90),
+        logger_version="RegNetX_3.2GF_resize96_mix_freeze_10_90",
+    )
+
+
+def train_regnety_1():
+    model = RegNet("regnet_y_3_2gf", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    train(
+        model,
+        100,
+        data=data,
+        callbacks=ResNetFineTune(10, 90),
+        logger_version="RegNetY_3.2GF_resize96_mix_freeze_10_90",
+    )
+
+
+def train_convnext_1():
+    model = ConvNeXt("convnext_tiny", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    epoch = 50
+    freeze = 5
+    train(
+        model,
+        epoch,
+        data=data,
+        callbacks=[ConvNeXtFineTune(freeze, epoch - freeze), LayerSummary()],
+        logger_version=f"ConvNeXt_Tiny_resize96_mix_freeze_{freeze}_{epoch - freeze}",
+    )
+
+
+def train_convnext_2():
+    model = ConvNeXt("convnext_small", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=128, mix=cutmix_or_mixup)
+    epoch = 20
+    freeze = 5
+    train(
+        model,
+        epoch,
+        data=data,
+        callbacks=[ConvNeXtFineTune(freeze, epoch - freeze), LayerSummary()],
+        logger_version=f"ConvNeXt_Small_resize96_mix_freeze_{freeze}_{epoch - freeze}",
+    )
+
+
+def train_convnext_3():
+    model = ConvNeXt("convnext_base", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=64, mix=cutmix_or_mixup)
+    train(
+        model,
+        10,
+        data=data,
+        callbacks=[ConvNeXtFineTune(1, 8), LayerSummary()],
+        logger_version="ConvNeXt_Base_resize96_mix_freeze_1_8",
+    )
+
+
+def train_convnext_4():
+    model = ConvNeXt("convnext_base", pretrained=True)
+    data = ResizedCifar10Data(resize=96, batch_size=64)
+    train(
+        model,
+        10,
+        data=data,
+        callbacks=[ConvNeXtFineTune(1, 8), LayerSummary()],
+        logger_version="ConvNeXt_Base_resize96_freeze_1_8",
     )
 
 
@@ -367,5 +459,14 @@ if __name__ == "__main__":
     # train_resnet50_5()
     # train_regnetx_1()
     # train_regnetx_2()
-    train_regnetx_3()
+    # train_regnetx_3()
+    # train_regnetx_4()
+    # train_regnetx_4_1()
+    # train_regnetx_5()
+    # train_regnetx_6()
+    # train_regnety_1()
+    # train_convnext_1()
+    # train_convnext_2()
+    # train_convnext_3()
+    train_convnext_4()
     pass

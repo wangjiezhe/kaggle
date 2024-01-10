@@ -198,11 +198,14 @@ class ResNet(Classifier):
 
 
 class RegNet(Classifier):
-    def __init__(self, model: str, pretrained=False, cosine_t_max: Optional[int] = None, **kwargs):
+    def __init__(
+        self, model: str, pretrained=False, cosine_t_max: Optional[int] = None, verbose=False, **kwargs
+    ):
         super().__init__()
         self.save_hyperparameters()
         self.cosine_t_max = cosine_t_max
         self.pretrained = pretrained
+        self.verbose = verbose
         available_models = models.list_models(include="regnet*")
         if model not in available_models:
             raise ValueError(f"{model} should be one of {available_models}.")
@@ -216,19 +219,16 @@ class RegNet(Classifier):
         return self.net(X)
 
     def configure_optimizers(self):
-        if self.pretrained:
-            return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
+        if self.cosine_t_max:
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
+                    optimizer, self.cosine_t_max, eta_min=0.00001, verbose=self.verbose
+                ),
+            }
         else:
-            optimizer = torch.optim.AdamW(self.parameters())
-            if self.cosine_t_max:
-                return {
-                    "optimizer": optimizer,
-                    "lr_scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
-                        optimizer, self.cosine_t_max, eta_min=0.0001
-                    ),
-                }
-            else:
-                return optimizer
+            return optimizer
 
 
 class ConvNeXt(Classifier):

@@ -1,6 +1,5 @@
 import os.path
 from math import ceil
-from typing import Callable, Optional
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -11,6 +10,27 @@ from torchvision.datasets.folder import default_loader
 from torchvision.transforms import v2
 
 __all__ = ["PredictDataset", "Cifar10Data", "ResizedCifar10Data"]
+
+
+class TrainDataset(VisionDataset):
+    def __init__(self, root, csv, transform=None):
+        super().__init__(root, transform=transform)
+        df = pd.read_csv(csv)
+        self.samples = [os.path.join(root, f"{image_id}.png") for image_id in df["id"].tolist()]
+        targets = df["label"].tolist()
+        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(sorted(set(targets)))}
+        self.targets = [self.class_to_idx[label] for label in targets]
+
+    def __getitem__(self, index):
+        path = self.samples[index]
+        sample = default_loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        target = self.targets[index]
+        return sample, target
+
+    def __len__(self):
+        return len(self.samples)
 
 
 class PredictDataset(VisionDataset):
