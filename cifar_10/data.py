@@ -91,7 +91,7 @@ class Cifar10Data(pl.LightningDataModule):
                     v2.RandomHorizontalFlip(),
                 ]
             )
-        self.trans_train = v2.Compose([aug, self.trans_predict]) if aug else self.trans_predict
+        self.trans_train = v2.Compose([aug, self.trans_predict])
         self.label_map = {
             v: k for k, v in ImageFolder(self.train_images_dir, self.trans_predict).class_to_idx.items()
         }
