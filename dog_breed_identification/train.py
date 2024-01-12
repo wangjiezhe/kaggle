@@ -8,7 +8,7 @@ import torch
 from callback import *
 from data import *
 from model import *
-from pytorch_lightning.callbacks import BackboneFinetuning, Callback
+from pytorch_lightning.callbacks import BackboneFinetuning, BatchSizeFinder, Callback
 from pytorch_lightning.loggers import TensorBoardLogger
 from termcolor import colored
 from torchvision.transforms import v2
@@ -324,7 +324,7 @@ def train_regnety_2():
         30,
         batch_size=32,
         num_workers=16,
-        callbacks=ResNetFineTune(50),
+        callbacks=RegNetFineTune(50),
         logger_version="RegNetY_3.2GF_mix_freeze_all",
         mix=cutmix_or_mixup,
         predict=False,
@@ -338,7 +338,7 @@ def train_regnety_3():
         30,
         batch_size=24,
         num_workers=8,
-        callbacks=ResNetFineTune(50),
+        callbacks=RegNetFineTune(50),
         logger_version="RegNetY_8GF_mix_freeze_all",
         mix=cutmix_or_mixup,
         predict=False,
@@ -352,7 +352,7 @@ def train_regnety_3():
         30,
         batch_size=16,
         num_workers=8,
-        callbacks=ResNetFineTune(50),
+        callbacks=RegNetFineTune(50),
         logger_version="RegNetY_16GF_mix_freeze_all",
         mix=cutmix_or_mixup,
         predict=False,
@@ -475,12 +475,68 @@ def train_convnext_9():
     train(
         model,
         20,
-        batch_size=16,  ## ???
+        batch_size=8,
         num_workers=8,
         callbacks=ConvNeXtFineTune(5, 15, 100),
         logger_version="ConvNeXt_Large_mix_freeze_5_15",
         mix=cutmix_or_mixup,
         predict=True,
+    )
+
+
+def train_regnety_4():
+    model = RegNet("regnet_y_32gf", pretrained=True)
+    train(
+        model,
+        30,
+        batch_size=16,
+        num_workers=8,
+        callbacks=[RegNetFineTune(50), LayerSummary()],
+        logger_version="RegNetY_32GF_mix_freeze_all",
+        mix=cutmix_or_mixup,
+        predict=False,
+    )
+
+
+def train_regnety_5():
+    model = RegNet("regnet_y_32gf", pretrained=True)
+    train(
+        model,
+        30,
+        batch_size=32,
+        num_workers=8,
+        callbacks=[RegNetFineTune(50, train_bn=False), LayerSummary()],
+        logger_version="RegNetY_32GF_mix_freeze_all_no_bn",
+        mix=cutmix_or_mixup,
+        predict=False,
+    )
+
+
+def train_regnety_6():
+    model = RegNet("regnet_y_128gf", pretrained=True)
+    train(
+        model,
+        30,
+        batch_size=4,
+        num_workers=8,
+        callbacks=RegNetFineTune(50),
+        logger_version="RegNetY_128GF_mix_freeze_all_no_bn",
+        mix=cutmix_or_mixup,
+        predict=False,
+    )
+
+
+def train_convnext_10():
+    model = ConvNeXt("convnext_small")
+    train(
+        model,
+        100,
+        batch_size=32,
+        num_workers=8,
+        callbacks=[LayerSummary()],
+        logger_version="ConvNeXt_Small_fp16",
+        predict=False,
+        precision="16-mixed",
     )
 
 
@@ -508,5 +564,10 @@ if __name__ == "__main__":
     # train_convnext_5()
     # train_convnext_6()
     # train_convnext_7()
-    train_convnext_8()
+    # train_convnext_8()
+    # train_convnext_9()
+    # train_regnety_4()
+    # train_regnety_5()
+    # train_regnety_6()
+    train_convnext_10()
     pass

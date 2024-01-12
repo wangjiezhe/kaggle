@@ -23,6 +23,7 @@ def init_cnn(m):
         nn.init.xavier_uniform_(m.weight)
 
 
+## https://github.com/rasbt/comparing-automatic-augmentation-blog/blob/main/notebooks/helper_utilities.py
 def plot_loss_and_acc(log_dir, loss_ylim=(0.0, 0.9), acc_ylim=(0.3, 1.0), save_loss=None, save_acc=None):
     metrics = pd.read_csv(f"{log_dir}/metrics.csv")
 
