@@ -5,6 +5,7 @@ data/
 lightning_logs/
 checkpoints/
 *.py[cod]
+*.ipynb
 .ipynb_checkpoints
 *.ckpt
 *.pt
