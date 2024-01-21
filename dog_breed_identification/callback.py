@@ -51,7 +51,7 @@ class Submission(BasePredictionWriter):
             predictions_centercrop = predictions
 
         ## 使用 `softmax` 函数进行归一化
-        preds = [row.tolist() for item in predictions_centercrop for row in item.softmax(dim=1)]
+        preds = [row.tolist() for item in predictions_centercrop for row in item]
         submission = pd.concat([imgs, pd.DataFrame(preds, columns=columns)], axis=1)
         submission.to_csv(f"submission_{now}.csv", index=False)
 

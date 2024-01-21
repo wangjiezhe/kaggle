@@ -9,7 +9,7 @@ from callback import *
 from data import *
 from model import *
 from pytorch_lightning.callbacks import BackboneFinetuning, BatchSizeFinder, Callback
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from termcolor import colored
 from torchvision.transforms import v2
 from utils import *
@@ -64,7 +64,8 @@ def train(
             five_crop=five_crop,
             mix=mix,
         )
-    logger = TensorBoardLogger(".", default_hp_metric=False, version=logger_version)
+    tb_logger = TensorBoardLogger(".", default_hp_metric=False, version=logger_version)
+    csv_logger = CSVLogger(".", name="csv_logs", version=logger_version, flush_logs_every_n_steps=10)
 
     model_name = model.hparams.get("model", model.__class__.__name__)
     if model_name:
@@ -86,7 +87,7 @@ def train(
             callbacks = [callbacks]
         ck += callbacks
 
-    trainer = pl.Trainer(max_epochs=epoch, logger=logger, callbacks=ck, **kwargs)
+    trainer = pl.Trainer(max_epochs=epoch, logger=[tb_logger, csv_logger], callbacks=ck, **kwargs)
     trainer.fit(model, data)
     if test:
         trainer.test(model, data)
