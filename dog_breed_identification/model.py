@@ -96,7 +96,7 @@ class Classifier(pl.LightningModule):
         elif dataloader_idx == 1:
             _, _, c, h, w = features.shape
             preds = self(features.view(-1, c, h, w))
-        return preds
+        return preds.softmax(dim=1)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())
