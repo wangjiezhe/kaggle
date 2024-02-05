@@ -3,14 +3,14 @@
 import pytorch_lightning as pl
 import torch
 from data import KaggleData
-from model import DenseMLP, MLP
+from model import MLP
 from pytorch_lightning.loggers import TensorBoardLogger
 
 torch.set_float32_matmul_precision("high")
 
 
 def train(
-    model,
+    net,
     epoch,
     logger_version=None,
     save_path=None,
@@ -23,21 +23,21 @@ def train(
     data = KaggleData(batch_size=batch_size, split=split)
     if load_path is not None:
         checkpoint = torch.load(load_path)
-        model.load_state_dict(checkpoint["state_dict"], strict=False)
-        model.inited = True
+        net.load_state_dict(checkpoint["state_dict"], strict=False)
+        net.inited = True
     logger = TensorBoardLogger(".", default_hp_metric=False, version=logger_version)
     trainer = pl.Trainer(max_epochs=epoch, logger=logger, log_every_n_steps=5)
-    trainer.fit(model, data)
+    trainer.fit(net, data)
     if test:
-        trainer.test(model, data)
+        trainer.test(net, data)
     if predict:
-        trainer.predict(model, data)
+        trainer.predict(net, data)
     if save_path is not None:
         trainer.save_checkpoint(save_path)
 
 
 if __name__ == "__main__":
-    model = MLP(optim="Adam")
-    round = 8
-    for i in range(round):
-        train(model, 100, predict=(i >= round - 1))
+    model = MLP(optimizer="Adam")
+    run_round = 8
+    for i in range(run_round):
+        train(model, 100, predict=(i >= run_round - 1))

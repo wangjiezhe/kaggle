@@ -13,20 +13,20 @@ from torchvision.transforms import v2
 __all__ = ["TrainDataset", "PredictDataset", "DogData"]
 
 
-## 从 `labels.csv` 读取训练用数据集
+# 从 `labels.csv` 读取训练用数据集
 class TrainDataset(VisionDataset):
     def __init__(self, root, csv, transform=None):
         super().__init__(root, transform=transform)
         df = pd.read_csv(csv)
         self.samples = [os.path.join(root, f"{image_id}.jpg") for image_id in df["id"].tolist()]
         targets = df["breed"].tolist()
-        ## `class_to_idx` 保存类别名到标签值的映射，类似 `ImageFolder.class_to_idx`
+        # `class_to_idx` 保存类别名到标签值的映射，类似 `ImageFolder.class_to_idx`
         self.class_to_idx = {cls_name: i for i, cls_name in enumerate(sorted(set(targets)))}
         self.targets = [self.class_to_idx[label] for label in targets]
 
     def __getitem__(self, index):
         path = self.samples[index]
-        ## 使用 `default_loader` 从文件读取图片，读取方法为 `PIL.Image.Open`
+        # 使用 `default_loader` 从文件读取图片，读取方法为 `PIL.Image.Open`
         sample = default_loader(path)
         if self.transform is not None:
             sample = self.transform(sample)
@@ -37,7 +37,7 @@ class TrainDataset(VisionDataset):
         return len(self.samples)
 
 
-## 从 `sample_submission.csv` 读取预测用数据集
+# 从 `sample_submission.csv` 读取预测用数据集
 class PredictDataset(VisionDataset):
     def __init__(self, root, csv, transform=None):
         super().__init__(root, transform=transform)
@@ -55,8 +55,8 @@ class PredictDataset(VisionDataset):
         return len(self.samples)
 
 
-## 把 `FiveCrop` 得到的5个图片合成一个batch
-## https://pytorch.org/vision/0.16/generated/torchvision.transforms.v2.FiveCrop.html
+# 把 `FiveCrop` 得到的5个图片合成一个batch
+# https://pytorch.org/vision/0.16/generated/torchvision.transforms.v2.FiveCrop.html
 class BatchMultiCrop(v2.Transform):
     def forward(self, samples):
         return tv_tensors.Image(torch.stack(samples))
@@ -64,19 +64,19 @@ class BatchMultiCrop(v2.Transform):
 
 class DogData(pl.LightningDataModule):
     def __init__(
-        self,
-        batch_size=128,
-        num_workers=8,
-        resize=224,
-        aug=None,
-        data_dir="./data",
-        train_images_dirname="train",
-        predict_images_dirname="test",
-        split=True,
-        split_random_seed=42,
-        valid_ratio=0.1,
-        five_crop=False,
-        mix=None,
+            self,
+            batch_size=128,
+            num_workers=8,
+            resize=224,
+            aug=None,
+            data_dir="./data",
+            train_images_dirname="train",
+            predict_images_dirname="test",
+            split=True,
+            split_random_seed=42,
+            valid_ratio=0.1,
+            five_crop=False,
+            mix=None,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["aug", "mix"])
@@ -93,9 +93,9 @@ class DogData(pl.LightningDataModule):
         self.valid_ratio = valid_ratio
         self.five_crop = five_crop
         if aug is None:
-            ## 默认使用 `TrivialAugmentWide` 进行数据增强
-            ## 几种自动数据增强的方法的对比：
-            ## https://sebastianraschka.com/blog/2023/data-augmentation-pytorch.html
+            # 默认使用 `TrivialAugmentWide` 进行数据增强
+            # 几种自动数据增强的方法的对比：
+            # https://sebastianraschka.com/blog/2023/data-augmentation-pytorch.html
             aug = v2.TrivialAugmentWide()
         self.trans_train = v2.Compose(
             [
@@ -138,7 +138,7 @@ class DogData(pl.LightningDataModule):
             val_dataset = TrainDataset(self.train_images_dir, self.train_csv, self.trans_test)
             if self.split:
                 assert 0.0 < self.valid_ratio < 1.0
-                ## 固定随机种子，以得到可以重复对比的结果
+                # 固定随机种子，以得到可以重复对比的结果
                 self.train_data, _ = random_split(
                     train_dataset,
                     [1.0 - self.valid_ratio, self.valid_ratio],
@@ -161,7 +161,7 @@ class DogData(pl.LightningDataModule):
             )
 
     def train_dataloader(self):
-        ## 支持使用 CutMix 和 MixUp
+        # 支持使用 CutMix 和 MixUp
         if self.mix is not None:
             collate_fn = lambda batch: self.mix(*default_collate(batch))
         else:
@@ -204,7 +204,7 @@ class DogData(pl.LightningDataModule):
         )
         d2 = DataLoader(
             self.predict_data_fivecrop,
-            ## 在使用 `FiveCrop` 的时候，要把 `batch_size` 减小
+            # 在使用 `FiveCrop` 的时候，要把 `batch_size` 减小
             batch_size=self.batch_size // 4,
             shuffle=False,
             num_workers=self.num_workers,

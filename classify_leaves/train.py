@@ -1,13 +1,10 @@
 #!/usr/bin/python3
 
-import pytorch_lightning as pl
-import torch
 from callback import *
 from data import LeavesData
 from model import *
 from pytorch_lightning.loggers import TensorBoardLogger
 from termcolor import colored
-from torchvision import models
 from torchvision.transforms import v2
 from utils import *
 
@@ -39,7 +36,7 @@ def train(
     split=True,
     mix=None,
     test=True,
-    predict=False,
+    prediction=False,
     **kwargs,
 ):
     if checkpoint_path is not None:
@@ -59,7 +56,7 @@ def train(
     ck = [save_last(model_name)]
     if test:
         ck += [ConfMat()]
-    if predict:
+    if prediction:
         ck += [Submission()]
     if best_model:
         ck += [
@@ -76,7 +73,7 @@ def train(
     trainer.fit(model, data)
     if test:
         trainer.test(model, data)
-    if predict:
+    if prediction:
         trainer.predict(model, data)
     if save_checkpoint_path is not None:
         trainer.save_checkpoint(save_checkpoint_path)
@@ -112,7 +109,7 @@ def train_convnext_1():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -125,7 +122,7 @@ def train_convnext_2():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -139,7 +136,7 @@ def train_convnext_3():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -154,7 +151,7 @@ def train_convnext_4():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -168,7 +165,7 @@ def train_regnet_1():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -182,7 +179,7 @@ def train_regnet_2():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -196,7 +193,7 @@ def train_regnet_3():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=64,
         split=False,
         best_model=True,
@@ -210,7 +207,7 @@ def train_regnet_4():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -224,7 +221,7 @@ def train_regnet_5():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -238,7 +235,7 @@ def train_regnet_6():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -252,8 +249,9 @@ def train_regnet_7():
     train(
         model,
         20,  # acturally stopped after 10 epoches
-        checkpoint_path="./lightning_logs/RegNetY_3.2GF - Freeze (correct)/checkpoints/regnet_y_3_2gf-epoch=19-step=11220.ckpt",
-        predict=True,
+        checkpoint_path="./lightning_logs/RegNetY_3.2GF - Freeze (correct)"
+                        "/checkpoints/regnet_y_3_2gf-epoch=19-step=11220.ckpt",
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -268,7 +266,7 @@ def train_regnet_8():
         model,
         10,
         checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610.ckpt",
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -283,7 +281,7 @@ def train_regnet_9():
         model,
         10,
         checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610-v1.ckpt",
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -298,7 +296,7 @@ def train_regnet_10():
         model,
         10,
         checkpoint_path="./checkpoints/regnet_y_3_2gf-epoch=09-step=5610-v2.ckpt",
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -312,7 +310,7 @@ def train_resnet_1():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -326,7 +324,7 @@ def train_resnet_2():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,
@@ -340,7 +338,7 @@ def train_resnet_3():
     train(
         model,
         20,
-        predict=True,
+        prediction=True,
         batch_size=32,
         split=False,
         best_model=True,

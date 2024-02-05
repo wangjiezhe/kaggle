@@ -115,7 +115,7 @@ class DefinedNet(Classifier):
                 else:
                     # SqueezeNet
                     assert layers == ["features", "classifier"]
-                    assert len(self.net.classifier) == 4
+                    assert len(self.net.classifier) == 4    # type: ignore
                     self.net.classifier[1] = nn.LazyConv2d(NUM_CLASSES, kernel_size=(1, 1), stride=(1, 1))
             case "head":
                 # Swin
@@ -128,8 +128,8 @@ class DefinedNet(Classifier):
             case _:
                 raise ValueError(f"{model} cannot be converted")
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -145,8 +145,8 @@ class ResNet(Classifier):
         self.net = models.get_model(model, weights=weights)
         self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -162,8 +162,8 @@ class RegNet(Classifier):
         self.net = models.get_model(model, weights=weights)
         self.net.fc = nn.LazyLinear(NUM_CLASSES)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -179,8 +179,8 @@ class ConvNeXt(Classifier):
         self.net = models.get_model(model, weights=weights)
         self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))

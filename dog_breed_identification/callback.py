@@ -3,8 +3,6 @@ from datetime import datetime
 from typing import Optional
 
 import pandas as pd
-import torch
-import torch.nn.functional as F
 from pytorch_lightning.callbacks import (
     BaseFinetuning,
     BasePredictionWriter,
@@ -50,23 +48,24 @@ class Submission(BasePredictionWriter):
         else:
             predictions_centercrop = predictions
 
-        ## 使用 `softmax` 函数进行归一化
+        # 使用 `softmax` 函数进行归一化
         preds = [row.tolist() for item in predictions_centercrop for row in item]
         submission = pd.concat([imgs, pd.DataFrame(preds, columns=columns)], axis=1)
         submission.to_csv(f"submission_{now}.csv", index=False)
 
         if data.five_crop:
+            # noinspection PyUnboundLocalVariable
             preds5 = [
                 row.tolist()
                 for item in predictions_fivecrop
-                ## 对五张图片的预测结果进行合并（直接取平均？）
+                # 对五张图片的预测结果进行合并（直接取平均？）
                 for row in item.view(-1, 5, item.shape[-1]).mean(dim=1).softmax(dim=1)
             ]
             submission5 = pd.concat([imgs, pd.DataFrame(preds5, columns=columns)], axis=1)
             submission5.to_csv(f"submission5_{now}.csv", index=False)
 
 
-## 显示预测错误最多的 k 个结果
+# 显示预测错误最多的 k 个结果
 class ConfMatTopK(Callback):
     def __init__(self, top_k):
         self.top_k = top_k
@@ -91,12 +90,12 @@ class ConfMatTopK(Callback):
                 ]
                 for value, (row, col) in zip(values, real_indicies)
             ],
-            columns=("True label", "Corrects", "Predict label", "Wrongs"),
+            columns=["True label", "Corrects", "Predict label", "Wrongs"],
         )
         print(df.to_markdown())
 
 
-## 直接打印混淆矩阵
+# 直接打印混淆矩阵
 class ConfMatPlot(Callback):
     def on_test_epoch_end(self, trainer, pl_module):
         pl_module.confusion_matrix.plot()

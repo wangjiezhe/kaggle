@@ -59,7 +59,7 @@ class ConfMat(Callback):
                 ]
                 for value, (row, col) in zip(values, real_indicies)
             ],
-            columns=("True label", "准确值", "Corrects", "Predict label", "预测值", "Wrongs"),
+            columns=["True label", "准确值", "Corrects", "Predict label", "预测值", "Wrongs"],
         )
         print(df.to_markdown())
 

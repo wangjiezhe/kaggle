@@ -5,6 +5,7 @@ Code for Kaggle competitions
 2. [Classify Leaves](https://www.kaggle.com/c/classify-leaves)
 3. [CIFAR-10 - Object Recognition in Images](https://www.kaggle.com/c/cifar-10)
 4. [Dog Breed Identification](https://www.kaggle.com/c/dog-breed-identification)
+5. [CowBoy Outfits Detection](https://www.kaggle.com/c/cowboyoutfits)
 
 
 Annotation for transforming code to run on Kaggle
@@ -38,37 +39,32 @@ sed -i 's#\(permute(.*\?).*\)#\1.contiguous()#' \
 ### Use Tensorboard
 
 ```bash
-curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
-    echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list && \
-    sudo apt update && sudo apt install ngrok
+pip install pyngrok
 ```
 
 ```python
+## Attach NGROK_AUTHTOKEN in `Add-ons > Secrets` first
 from kaggle_secrets import UserSecretsClient
 
 user_secrets = UserSecretsClient()
-ngrok_authtoken = user_secrets.get_secret("NGROK_AUTHTOKEN")
+ngrokToken = user_secrets.get_secret("NGROK_AUTHTOKEN")
+```
+
+```python
+from pyngrok import conf, ngrok
+conf.get_default().auth_token = ngrokToken
+conf.get_default().monitor_thread = False
+ssh_tunnels = ngrok.get_tunnels(conf.get_default())
+if len(ssh_tunnels) == 0:
+    ssh_tunnel = ngrok.connect(6006)
+    print('address：'+ssh_tunnel.public_url)
+else:
+    print('address：'+ssh_tunnels[0].public_url)
 ```
 
 ```python
 from subprocess import Popen
-import time
 
-Popen(f"ngrok config add-authtoken {ngrok_authtoken}", shell=True)
-time.sleep(1)
-```
-
-```python
-Popen("ngrok http 6006", shell=True)
-time.sleep(1)
-```
-
-```bash
-curl -s http://localhost:4040/api/tunnels | python3 -c \
-    "import sys, json; print('Tensorboard URL:', json.load(sys.stdin)['tunnels'][0]['public_url'])"
-```
-
-```python
 Popen("tensorboard --logdir ./lightning_logs/ --host 0.0.0.0 --port 6006", shell=True)
 ```
 

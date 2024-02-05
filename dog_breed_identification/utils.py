@@ -19,11 +19,11 @@ cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
 
 
 def init_cnn(m):
-    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+    if type(m) is nn.Linear or type(m) is nn.Conv2d:
         nn.init.xavier_uniform_(m.weight)
 
 
-## https://github.com/rasbt/comparing-automatic-augmentation-blog/blob/main/notebooks/helper_utilities.py
+# https://github.com/rasbt/comparing-automatic-augmentation-blog/blob/main/notebooks/helper_utilities.py
 def plot_loss_and_acc(log_dir, loss_ylim=(0.0, 0.9), acc_ylim=(0.3, 1.0), save_loss=None, save_acc=None):
     metrics = pd.read_csv(f"{log_dir}/metrics.csv")
 
