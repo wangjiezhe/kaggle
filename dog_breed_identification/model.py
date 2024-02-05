@@ -96,6 +96,7 @@ class Classifier(pl.LightningModule):
         elif dataloader_idx == 1:
             _, _, c, h, w = features.shape
             preds = self(features.view(-1, c, h, w))
+        # noinspection PyUnboundLocalVariable
         return preds.softmax(dim=1)
 
     def configure_optimizers(self):
@@ -128,8 +129,8 @@ class DefinedNet(Classifier):
             nn.LazyLinear(NUM_CLASSES),
         )
 
-    def forward(self, X):
-        y = self.backbone(X)
+    def forward(self, x):
+        y = self.backbone(x)
         y = self.classifier(y)
         return y
 
@@ -156,13 +157,16 @@ class PretrainedNet(Classifier):
             case "classifier":
                 if isinstance(self.net.classifier, nn.Linear):
                     # DenseNet
-                    self.net.classifier = nn.LazyLinear(NUM_CLASSES)
+                    in_features = self.net.classifier.in_features
+                    self.net.classifier = nn.Linear(in_features, NUM_CLASSES)
                 elif isinstance(self.net.classifier[-1], nn.Linear):
                     # VGG, ConvNeXt[2022], EfficientNet, AlexNet, MNASNet, MobileNet
-                    self.net.classifier[-1] = nn.LazyLinear(NUM_CLASSES)
+                    in_features = self.net.classifier[-1].in_features
+                    self.net.classifier[-1] = nn.Linear(in_features, NUM_CLASSES)
                 else:
                     # SqueezeNet
                     assert layers == ["features", "classifier"]
+                    # noinspection PyTypeChecker
                     assert len(self.net.classifier) == 4
                     self.net.classifier[1] = nn.LazyConv2d(NUM_CLASSES, kernel_size=(1, 1), stride=(1, 1))
             case "head":
@@ -176,8 +180,8 @@ class PretrainedNet(Classifier):
             case _:
                 raise ValueError(f"{model} cannot be converted")
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -196,8 +200,8 @@ class ResNet(Classifier):
         self.net.fc = nn.Linear(in_features, NUM_CLASSES)
         self.net.fc.apply(init_cnn)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -223,8 +227,8 @@ class RegNet(Classifier):
             self.net = models.get_model(model, num_classes=NUM_CLASSES, **kwargs)
         self.net.fc.apply(init_cnn)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))
@@ -252,8 +256,8 @@ class ConvNeXt(Classifier):
         self.net.classifier[-1] = nn.Linear(in_features, NUM_CLASSES)
         self.net.classifier.apply(init_cnn)
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(filter(lambda p: p.requires_grad, self.parameters()))

@@ -6,7 +6,6 @@ from typing import Callable, List, Optional, Union
 import pytorch_lightning as pl
 import torch
 from callback import *
-from callback import LayerSummary
 from data import *
 from model import *
 from pytorch_lightning.callbacks import BackboneFinetuning, Callback
@@ -39,7 +38,7 @@ def train(
     split_random=False,
     mix: Optional[Callable] = None,
     test=True,
-    predict=True,
+    prediction=True,
     **kwargs,
 ):
     if isinstance(model, str):
@@ -70,7 +69,7 @@ def train(
     ck = [save_last(model_name, dirpath=best_model_dirpath)]
     if test:
         ck += [ConfMatTop20()]
-    if predict:
+    if prediction:
         ck += [Submission()]
     if best_model:
         best_val_acc = save_best_val_acc(model_name, dirpath=best_model_dirpath)
@@ -93,10 +92,11 @@ def train(
     if save_weights_path is not None:
         torch.save(model.state_dict(), save_weights_path)
 
-    if predict:
+    if prediction:
         trainer.predict(model, data)
         if best_model:
-            best_val_acc_epoch = int(re.findall("epoch=(\d+)", best_val_acc.best_model_path)[0])
+            # noinspection PyUnboundLocalVariable
+            best_val_acc_epoch = int(re.findall(r"epoch=(\d+)", best_val_acc.best_model_path)[0])
             if best_val_acc_epoch < trainer.current_epoch - 1:
                 trainer.predict(model, data, ckpt_path=best_val_acc.best_model_path)
 

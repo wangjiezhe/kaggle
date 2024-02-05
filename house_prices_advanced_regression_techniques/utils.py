@@ -7,9 +7,10 @@ from torch import nn
 from torchmetrics import Metric
 
 
-## log_mse_loss(x, y) == torch.sqrt(torchmetrics.functional.mean_squared_log_error(x-1, y-1))
-##                    == sklearn.metrics.mean_squared_log_error(x-1, y-1, squared=False)
+# log_mse_loss(x, y) == torch.sqrt(torchmetrics.functional.mean_squared_log_error(x-1, y-1))
+#                    == sklearn.metrics.mean_squared_log_error(x-1, y-1, squared=False)
 def log_mse_loss(preds, labels):
+    # noinspection PyCallingNonCallable
     clipped_preds = torch.clamp(preds, 1, float("inf"))
     mse = torch.sqrt(F.mse_loss(torch.log(clipped_preds), torch.log(labels)))
     return mse
@@ -22,6 +23,7 @@ class RMSLE(Metric):
         self.add_state("num_samples", default=torch.tensor(0), dist_reduce_fx="sum")
 
     def update(self, y_pred: torch.Tensor, y_true: torch.Tensor):
+        # noinspection PyCallingNonCallable
         clipped_preds = torch.clamp(y_pred, 1, float("inf"))
         squared_log_diff = torch.pow(torch.log(clipped_preds) - torch.log(y_true), 2)
         self.sum_squared_log_diff += torch.sum(squared_log_diff)
@@ -33,7 +35,7 @@ class RMSLE(Metric):
 
 
 def init_cnn(m):
-    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+    if type(m) is nn.Linear or type(m) is nn.Conv2d:
         nn.init.xavier_uniform_(m.weight)
 
 

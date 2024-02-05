@@ -18,6 +18,7 @@ __all__ = [
     "save_best_val_acc",
     "save_best_val_loss",
     "save_last",
+    "LayerSummary",
 ]
 
 log = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class ConfMatTop20(Callback):
                 ]
                 for value, (row, col) in zip(values, real_indicies)
             ],
-            columns=("True label", "Corrects", "Predict label", "Wrongs"),
+            columns=["True label", "Corrects", "Predict label", "Wrongs"],
         )
         print(df.to_markdown())
 

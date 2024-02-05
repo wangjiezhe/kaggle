@@ -1,5 +1,4 @@
 import os.path
-from typing import Any
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -86,8 +85,12 @@ class Classifier(pl.LightningModule):
 
 
 class MLP(Classifier):
-    def __init__(self, lr=1, momentum=0, weight_decay=1e-4, hidden_size=[1024, 64], optim="SGD"):
+    def __init__(self, lr=1, momentum=0, weight_decay=1e-4, hidden_size=(1024, 64), optimizer="SGD"):
         super().__init__()
+        self.lr = lr
+        self.momentum = momentum
+        self.weight_decay = weight_decay
+        self.optim = optimizer
         self.save_hyperparameters()
         self.net = nn.Sequential()
         input_size = self.input_size
@@ -106,11 +109,11 @@ class MLP(Classifier):
             self.net.apply(init_cnn)
             self.inited = True
 
-    def forward(self, X):
-        return self.net(X)
+    def forward(self, x):
+        return self.net(x)
 
     def configure_optimizers(self):
-        match self.hparams["optim"]:
+        match self.optimizer:
             case "Adadelta":
                 return optim.Adadelta(self.parameters())
             case "Adam":
@@ -120,9 +123,9 @@ class MLP(Classifier):
             case _:
                 return optim.SGD(
                     self.parameters(),
-                    lr=self.hparams.lr,
-                    momentum=self.hparams.momentum,
-                    weight_decay=self.hparams.weight_decay,
+                    lr=self.lr,
+                    momentum=self.momentum,
+                    weight_decay=self.weight_decay,
                 )
 
 
@@ -156,6 +159,9 @@ class DenseMLP(Classifier):
         weight_decay=1e-5,
     ):
         super().__init__()
+        self.lr = lr
+        self.momentum = momentum
+        self.weight_decay = weight_decay
         self.save_hyperparameters()
         self.inited = False
         blk = []
@@ -190,10 +196,10 @@ class DenseMLP(Classifier):
         self.inited = True
 
     def configure_optimizers(self):
-        self.hparams["optim"] = "SGD"
+        self.optimizer = "SGD"
         return torch.optim.SGD(
             self.parameters(),
-            lr=self.hparams.lr,
-            momentum=self.hparams.momentum,
-            weight_decay=self.hparams.weight_decay,
+            lr=self.lr,
+            momentum=self.momentum,
+            weight_decay=self.weight_decay,
         )
