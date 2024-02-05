@@ -18,29 +18,29 @@ torch.set_float32_matmul_precision("medium")
 
 
 def train(
-        model: Union[pl.LightningModule, str],
-        epoch: int,
-        pretrained=False,
-        best_model=True,
-        best_model_dirpath: Optional[str] = None,
-        callbacks: Optional[Union[List[Callback], Callback]] = None,
-        logger_version: Optional[Union[int, str, bool]] = None,
-        checkpoint_path: Optional[str] = None,
-        weights_path: Optional[str] = None,
-        save_checkpoint_path: Optional[str] = None,
-        save_weights_path: Optional[str] = None,
-        data=None,
-        batch_size=128,
-        num_workers=8,
-        resize=224,
-        aug: Optional[Callable] = None,
-        split=True,
-        split_random_seed=42,
-        five_crop=False,
-        mix: Optional[Callable] = None,
-        test=True,
-        prediction=True,
-        **kwargs,
+    model: Union[pl.LightningModule, str],
+    epoch: int,
+    pretrained=False,
+    best_model=True,
+    best_model_dirpath: Optional[str] = None,
+    callbacks: Optional[Union[List[Callback], Callback]] = None,
+    logger_version: Optional[Union[int, str, bool]] = None,
+    checkpoint_path: Optional[str] = None,
+    weights_path: Optional[str] = None,
+    save_checkpoint_path: Optional[str] = None,
+    save_weights_path: Optional[str] = None,
+    data=None,
+    batch_size=128,
+    num_workers=8,
+    resize=224,
+    aug: Optional[Callable] = None,
+    split=True,
+    split_random_seed=42,
+    five_crop=False,
+    mix: Optional[Callable] = None,
+    test=True,
+    prediction=True,
+    **kwargs,
 ):
     if isinstance(model, str):
         model = DefinedNet(model, pretrained=pretrained)
@@ -70,7 +70,7 @@ def train(
     model_name = model.hparams.get("model", model.__class__.__name__)
     if model_name:
         print(colored(f"Start training {model_name} in {epoch} epoches...", "green"))
-    ck = [save_last(model_name, dirpath=best_model_dirpath)]
+    ck: List[Callback] = [save_last(model_name, dirpath=best_model_dirpath)]
     if test:
         ck += [ConfMatTopK(20)]
     if prediction:
@@ -99,15 +99,12 @@ def train(
     if prediction:
         trainer.predict(model, data)
         if best_model:
-            # noinspection PyUnboundLocalVariable
-            best_val_acc_epoch = int(re.findall(r"epoch=(\d+)", best_val_acc.best_model_path)[0])
+            best_val_acc_epoch = int(re.findall(r"epoch=(\d+)", best_val_acc.best_model_path)[0])  # type: ignore
             if best_val_acc_epoch < trainer.current_epoch - 1:
-                trainer.predict(model, data, ckpt_path=best_val_acc.best_model_path)
+                trainer.predict(model, data, ckpt_path=best_val_acc.best_model_path)  # type: ignore
 
 
-def predict(
-        model, data=None, batch_size=128, five_crop=False, checkpoint_path=None, weights_path=None, write=True
-):
+def predict(model, data=None, batch_size=128, five_crop=False, checkpoint_path=None, weights_path=None, write=True):
     if isinstance(model, str):
         model = DefinedNet(model)
     if checkpoint_path is not None:
@@ -119,7 +116,7 @@ def predict(
         model.load_state_dict(state, strict=False)
     if data is None:
         data = DogData(batch_size=batch_size, five_crop=five_crop)
-    callbacks = [Submission()] if write else None
+    callbacks: Optional[List[Callback]] = [Submission()] if write else None
     trainer = pl.Trainer(max_epochs=0, logger=False, callbacks=callbacks)
     return trainer.predict(model, data)
 

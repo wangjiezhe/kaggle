@@ -3,13 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 import pandas as pd
-from pytorch_lightning.callbacks import (
-    BaseFinetuning,
-    BasePredictionWriter,
-    BatchSizeFinder,
-    Callback,
-    ModelCheckpoint,
-)
+from pytorch_lightning.callbacks import BaseFinetuning, BasePredictionWriter, BatchSizeFinder, Callback, ModelCheckpoint
 from torchinfo import summary
 from utils import NUM_CLASSES
 
@@ -35,7 +29,7 @@ class Submission(BasePredictionWriter):
         super().__init__(write_interval="epoch")
 
     def write_on_epoch_end(self, trainer, pl_module, predictions, batch_indices):
-        data = trainer.datamodule
+        data = trainer.datamodule  # type: ignore
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         df = pd.read_csv(data.predict_csv)
@@ -54,10 +48,9 @@ class Submission(BasePredictionWriter):
         submission.to_csv(f"submission_{now}.csv", index=False)
 
         if data.five_crop:
-            # noinspection PyUnboundLocalVariable
             preds5 = [
                 row.tolist()
-                for item in predictions_fivecrop
+                for item in predictions_fivecrop  # type: ignore
                 # 对五张图片的预测结果进行合并（直接取平均？）
                 for row in item.view(-1, 5, item.shape[-1]).mean(dim=1).softmax(dim=1)
             ]
@@ -78,7 +71,7 @@ class ConfMatTopK(Callback):
         values, indices = values.tolist(), indices.tolist()
         real_indicies = [(i // NUM_CLASSES, i % NUM_CLASSES) for i in indices]
 
-        label_map = trainer.datamodule.label_map
+        label_map = trainer.datamodule.label_map  # type: ignore
 
         df = pd.DataFrame(
             [
@@ -132,8 +125,7 @@ class ResNetFineTune(BaseFinetuning):
             )
             if self.verbose:
                 log.info(
-                    f"Current lr: {optimizer.param_groups[0]['lr']}, "
-                    f"Backbone lr: {optimizer.param_groups[1]['lr']}"
+                    f"Current lr: {optimizer.param_groups[0]['lr']}, " f"Backbone lr: {optimizer.param_groups[1]['lr']}"
                 )
         elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
             self.freeze(backbone, train_bn=self.train_bn_when_freezing)
@@ -169,16 +161,12 @@ class RegNetFineTune(BaseFinetuning):
                 train_bn=(not self.train_bn_when_freezing),
             )
         elif self.unfreeze_at_epoch is not None and current_epoch == self.freeze_again_at_epoch:
-            self.freeze(
-                [pl_module.net.stem, pl_module.net.trunk_output], train_bn=self.train_bn_when_freezing
-            )
+            self.freeze([pl_module.net.stem, pl_module.net.trunk_output], train_bn=self.train_bn_when_freezing)
             optimizer.param_groups.pop()
 
 
 class ConvNeXtFineTune(BaseFinetuning):
-    def __init__(
-        self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None, initial_denom_lr=10
-    ):
+    def __init__(self, unfreeze_at_epoch=10, freeze_again_at_epoch: Optional[int] = None, initial_denom_lr=10):
         super().__init__()
         self.unfreeze_at_epoch = unfreeze_at_epoch
         self.freeze_again_at_epoch = freeze_again_at_epoch
@@ -262,7 +250,7 @@ class LayerSummary(Callback):
         self.depth = depth
 
     def on_fit_start(self, trainer, pl_module):
-        batch, _ = next(iter(trainer.datamodule.val_dataloader()))
+        batch, _ = next(iter(trainer.datamodule.val_dataloader()))  # type: ignore
         batch = batch.to(pl_module.device)
         summary(
             pl_module,

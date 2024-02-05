@@ -41,14 +41,14 @@ class Classifier(pl.LightningModule):
         preds = self(features)
         loss = F.cross_entropy(preds, labels)
         metric = {"train_loss": loss}
-        if self.trainer.datamodule.mix is None:
+        if self.trainer.datamodule.mix is None:  # type: ignore
             with torch.no_grad():
                 metric["train_acc"] = self.train_acc(preds, labels)
         self.log_dict(metric, prog_bar=True)
         return loss
 
     def on_train_epoch_end(self):
-        if self.trainer.datamodule.mix is None:
+        if self.trainer.datamodule.mix is None:  # type: ignore
             self.log_dict({"train_epoch_acc": self.train_acc.compute()})
 
     def validation_step(self, batch):
@@ -80,8 +80,8 @@ class Classifier(pl.LightningModule):
         return loss
 
     def on_test_epoch_end(self):
-        self.logger.log_hyperparams(
-            self.hparams,
+        self.logger.log_hyperparams(  # type: ignore
+            self.hparams,  # type: ignore
             {
                 "hp/train_acc": self.train_acc.compute(),
                 "hp/val_acc": self.val_acc.compute(),
@@ -96,8 +96,7 @@ class Classifier(pl.LightningModule):
         elif dataloader_idx == 1:
             _, _, c, h, w = features.shape
             preds = self(features.view(-1, c, h, w))
-        # noinspection PyUnboundLocalVariable
-        return preds.softmax(dim=1)
+        return preds.softmax(dim=1)  # type: ignore
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())
@@ -166,8 +165,7 @@ class PretrainedNet(Classifier):
                 else:
                     # SqueezeNet
                     assert layers == ["features", "classifier"]
-                    # noinspection PyTypeChecker
-                    assert len(self.net.classifier) == 4
+                    assert len(self.net.classifier) == 4  # type: ignore
                     self.net.classifier[1] = nn.LazyConv2d(NUM_CLASSES, kernel_size=(1, 1), stride=(1, 1))
             case "head":
                 # Swin
@@ -208,9 +206,7 @@ class ResNet(Classifier):
 
 
 class RegNet(Classifier):
-    def __init__(
-        self, model: str, pretrained=False, cosine_t_max: Optional[int] = None, verbose=False, **kwargs
-    ):
+    def __init__(self, model: str, pretrained=False, cosine_t_max: Optional[int] = None, verbose=False, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.cosine_t_max = cosine_t_max

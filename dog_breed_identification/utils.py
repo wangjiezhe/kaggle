@@ -31,7 +31,7 @@ def plot_loss_and_acc(log_dir, loss_ylim=(0.0, 0.9), acc_ylim=(0.3, 1.0), save_l
     agg_col = "epoch"
     for i, dfg in metrics.groupby(agg_col):
         agg = dict(dfg.mean())
-        agg[agg_col] = i
+        agg[agg_col] = i  # type: ignore
         aggreg_metrics.append(agg)
 
     df_metrics = pd.DataFrame(aggreg_metrics)
