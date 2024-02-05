@@ -59,24 +59,24 @@ class PredictDataset(VisionDataset):
 # https://pytorch.org/vision/0.16/generated/torchvision.transforms.v2.FiveCrop.html
 class BatchMultiCrop(v2.Transform):
     def forward(self, samples):
-        return tv_tensors.Image(torch.stack(samples))
+        return tv_tensors.Image(torch.stack(samples))  # type: ignore
 
 
 class DogData(pl.LightningDataModule):
     def __init__(
-            self,
-            batch_size=128,
-            num_workers=8,
-            resize=224,
-            aug=None,
-            data_dir="./data",
-            train_images_dirname="train",
-            predict_images_dirname="test",
-            split=True,
-            split_random_seed=42,
-            valid_ratio=0.1,
-            five_crop=False,
-            mix=None,
+        self,
+        batch_size=128,
+        num_workers=8,
+        resize=224,
+        aug=None,
+        data_dir="./data",
+        train_images_dirname="train",
+        predict_images_dirname="test",
+        split=True,
+        split_random_seed=42,
+        valid_ratio=0.1,
+        five_crop=False,
+        mix=None,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["aug", "mix"])
@@ -102,7 +102,7 @@ class DogData(pl.LightningDataModule):
                 aug,
                 v2.RandomResizedCrop(resize, scale=(0.64, 1), antialias=True),
                 v2.PILToTensor(),
-                v2.ToDtype(torch.float32, scale=True),
+                v2.ToDtype(torch.float32, scale=True),  # type: ignore
                 v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
@@ -111,7 +111,7 @@ class DogData(pl.LightningDataModule):
                 v2.Resize(resize),
                 v2.CenterCrop(resize),
                 v2.PILToTensor(),
-                v2.ToDtype(torch.float32, scale=True),
+                v2.ToDtype(torch.float32, scale=True),  # type: ignore
                 v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
@@ -121,15 +121,12 @@ class DogData(pl.LightningDataModule):
                 v2.FiveCrop(resize),
                 v2.PILToTensor(),
                 BatchMultiCrop(),
-                v2.ToDtype(torch.float32, scale=True),
+                v2.ToDtype(torch.float32, scale=True),  # type: ignore
                 v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
         self.label_map = {
-            v: k
-            for k, v in TrainDataset(
-                self.train_images_dir, self.train_csv, self.trans_train
-            ).class_to_idx.items()
+            v: k for k, v in TrainDataset(self.train_images_dir, self.train_csv, self.trans_train).class_to_idx.items()
         }
 
     def setup(self, stage=None):
@@ -142,12 +139,12 @@ class DogData(pl.LightningDataModule):
                 self.train_data, _ = random_split(
                     train_dataset,
                     [1.0 - self.valid_ratio, self.valid_ratio],
-                    generator=torch.Generator().manual_seed(self.split_random_seed),
+                    generator=torch.Generator().manual_seed(self.split_random_seed),  # type: ignore
                 )
                 _, self.val_data = random_split(
                     val_dataset,
                     [1.0 - self.valid_ratio, self.valid_ratio],
-                    generator=torch.Generator().manual_seed(self.split_random_seed),
+                    generator=torch.Generator().manual_seed(self.split_random_seed),  # type: ignore
                 )
             else:
                 self.train_data = train_dataset
@@ -156,14 +153,12 @@ class DogData(pl.LightningDataModule):
             self.test_data = TrainDataset(self.train_images_dir, self.train_csv, self.trans_test)
         if stage == "predict":
             self.predict_data = PredictDataset(self.predict_images_dir, self.predict_csv, self.trans_test)
-            self.predict_data_fivecrop = PredictDataset(
-                self.predict_images_dir, self.predict_csv, self.trans_predict
-            )
+            self.predict_data_fivecrop = PredictDataset(self.predict_images_dir, self.predict_csv, self.trans_predict)
 
     def train_dataloader(self):
         # 支持使用 CutMix 和 MixUp
         if self.mix is not None:
-            collate_fn = lambda batch: self.mix(*default_collate(batch))
+            collate_fn = lambda batch: self.mix(*default_collate(batch))  # type: ignore
         else:
             collate_fn = None
 
