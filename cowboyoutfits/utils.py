@@ -7,10 +7,14 @@ from torchvision.transforms.v2 import functional as F
 from torchvision.utils import draw_bounding_boxes, draw_segmentation_masks
 
 __all__ = [
+    "NUM_CLASSES",
     "init_cnn",
     "plot",
     "plot_loss_and_acc",
 ]
+
+
+NUM_CLASSES = 6
 
 
 def init_cnn(m):
