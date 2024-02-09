@@ -18,23 +18,26 @@ Annotation for transforming code to run on Kaggle
 
 ### Use multiple GPU
 
-- Add `strategy="ddp_notebook"` to `pl.Trainer`.
+- Add `accelerator="gpu", devices=2, strategy="ddp_notebook"` to `pl.Trainer`.
 - Use another trainer with `devices=1` for test and predict.
 - Add `sync_dist=True` to `log` and `log_dict`.
 - `trainer.fit` can only called once.
+- When rewriting any epoch_end function, if you log, just make sure that the tensor is on gpu device. If you initialize new tensor, initialize it with device=self.device. See [#18803](https://github.com/Lightning-AI/pytorch-lightning/issues/18803).
 - Fix warnings with `permute` and `transpose` when using DDP, issued in [#47163](https://github.com/pytorch/pytorch/issues/47163), as shown below:
 
 ```bash
-sed -i 's#\(permute(.*\?).*\)#\1.contiguous()#' \
+sed -i 's#\(permute(.*\?)\)#\1.contiguous()#' \
     /opt/conda/lib/python3.10/site-packages/torchvision/models/convnext.py \
     /opt/conda/lib/python3.10/site-packages/torchvision/ops/misc.py \
+    /opt/conda/lib/python3.10/site-packages/torchvision/models/detection/roi_heads.py \
+    /opt/conda/lib/python3.10/site-packages/torchvision/models/detection/rpn.py \
     ...
 ```
 
-### Torchvision
+~~### Torchvision~~
 
-- The version of `torchvision` is 0.15.1, so there are not `v2.CutMix` and `v2.MixUp` in `torchvision.transforms`.
-- Use `import torchvision.transforms as v1` instead.
+~~- The version of `torchvision` is 0.15.1, so there are not `v2.CutMix` and `v2.MixUp` in `torchvision.transforms`.~~
+~~- Use `import torchvision.transforms as v1` instead.~~
 
 ### Use Tensorboard
 
