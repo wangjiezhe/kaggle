@@ -4,12 +4,11 @@ import random
 import lightning as L
 import torch
 from pycocotools.coco import COCO
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torchvision import tv_tensors
 from torchvision.datasets import CocoDetection, wrap_dataset_for_transforms_v2
-from torchvision.ops import box_convert
 from torchvision.transforms import v2
-from torchvision.transforms.v2 import functional as F
+from utils import *
 
 __all__ = [
     "CowboyData",
@@ -49,8 +48,10 @@ class CowboyData(L.LightningDataModule):
         if self.split:
             random.seed(self.split_random_seed)
             self.validation_images_id = []
-            for category in coco.cats.keys():
+            for category in sorted(coco.cats.keys()):
                 self.validation_images_id += random.sample(coco.catToImgs[category], self.valid_n_per_cat)
+            if self.split_random_seed == 42:
+                assert self.validation_images_id == VALIDATION_IMAGES_ID_42
 
     def target_transform(self, target):
         target["labels"].apply_(lambda x: self.label_to_idx[x])
