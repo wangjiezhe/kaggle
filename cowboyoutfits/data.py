@@ -43,7 +43,7 @@ class CowboyData(L.LightningDataModule):
         coco = COCO(self.train_annFile)
         self.label_to_idx = {k: idx + 1 for idx, k in enumerate(coco.cats.keys())}
         self.label_to_name = {k: v["name"] for k, v in coco.cats.items()}
-        self.idx_to_name = {idx + 1: v["name"] for idx, (k, v) in enumerate(coco.cats.items())}
+        self.idx_to_name = {idx + 1: v["name"] for idx, (_, v) in enumerate(coco.cats.items())}
 
         if self.split:
             random.seed(self.split_random_seed)

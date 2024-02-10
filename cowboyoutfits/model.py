@@ -10,6 +10,7 @@ from utils import *
 __all__ = [
     "Detector",
     "Cowboy_FasterRCNN",
+    "Cowboy_FasterRCNN_resnet",
 ]
 
 
@@ -108,21 +109,20 @@ class Cowboy_FasterRCNN(Detector):
         return torchvision.models.list_models(include="fasterrcnn*")
 
 
-class Cowboy_FasterRCNN_resnet(Detector, FasterRCNN):
-    def __init__(self, backbone: str, pretrained=True):
-        super().__init__()
-        self.save_hyperparameters()
-
-        available_backbones = self.list_backbones()
+class Cowboy_FasterRCNN_resnet(FasterRCNN, Detector):
+    def __init__(self, backbone: str, pretrained=True, trainable_backbone_layers=3):
+        # self.save_hyperparameters()
+        available_backbones = self.list_models()
         if backbone not in available_backbones:
             raise ValueError(f"{backbone} should be one of {available_backbones}.")
         weights = "DEFAULT" if pretrained else None
-
-        backbone = resnet_fpn_backbone(backbone, weights)
-        FasterRCNN.__init__(backbone, NUM_CLASSES)
+        backbone = resnet_fpn_backbone(
+            backbone_name=backbone, weights=weights, trainable_layers=trainable_backbone_layers
+        )
+        super().__init__(backbone=backbone, num_classes=NUM_CLASSES)
 
     @classmethod
-    def list_backbones(cls):
+    def list_models(cls):
         return torchvision.models.list_models(
             include="resne*",
         ) + torchvision.models.list_models(
