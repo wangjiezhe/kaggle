@@ -209,7 +209,7 @@ def save_last(prefix, dirpath=None):
         dirpath=dirpath,
         filename=filename,
         save_weights_only=True,
-        save_last=True,
+        save_last="link",
     )
 
 
