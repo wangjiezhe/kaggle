@@ -111,7 +111,7 @@ class Cowboy_FasterRCNN(Detector):
 
 class Cowboy_FasterRCNN_resnet(FasterRCNN, Detector):
     def __init__(self, backbone: str, pretrained=True, trainable_backbone_layers=3):
-        # self.save_hyperparameters()
+        self.save_hyperparameters()
         available_backbones = self.list_models()
         if backbone not in available_backbones:
             raise ValueError(f"{backbone} should be one of {available_backbones}.")

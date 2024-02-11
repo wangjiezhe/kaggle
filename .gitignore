@@ -5,6 +5,7 @@ __pycache__/
 data/
 lightning_logs/
 csv_logs/
+wandb/
 checkpoints/
 *.py[cod]
 *.ipynb

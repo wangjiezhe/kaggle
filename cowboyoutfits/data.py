@@ -4,7 +4,7 @@ import random
 import lightning as L
 import torch
 from pycocotools.coco import COCO
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from torchvision import tv_tensors
 from torchvision.datasets import CocoDetection, wrap_dataset_for_transforms_v2
 from torchvision.transforms import v2
@@ -44,6 +44,8 @@ class CowboyData(L.LightningDataModule):
         self.label_to_idx = {k: idx + 1 for idx, k in enumerate(coco.cats.keys())}
         self.label_to_name = {k: v["name"] for k, v in coco.cats.items()}
         self.idx_to_name = {idx + 1: v["name"] for idx, (_, v) in enumerate(coco.cats.items())}
+        # self.category_weights = {k: 10000 / len(coco.getAnnIds(catIds=k)) for k in coco.cats.keys()}
+        # self.category_weights = {87: 1600, 1034: 5, 131: 20, 318: 20, 588: 4.5}
 
         if self.split:
             random.seed(self.split_random_seed)
@@ -96,10 +98,18 @@ class CowboyData(L.LightningDataModule):
             self.val_data = wrap_dataset_for_transforms_v2(val_dataset)
 
     def train_dataloader(self):
+        # targets = [self.train_data._load_target(id) for id in self.train_data.ids]
+        # sample_weights = [
+        #     sum([self.category_weights[info["category_id"]] for info in target]) for target in targets
+        # ]
+        # sampler = WeightedRandomSampler(
+        #     weights=sample_weights, num_samples=len(self.train_data), replacement=True
+        # )
         return DataLoader(
             self.train_data,
             batch_size=self.train_batch_size,
             shuffle=True,
+            # sampler=sampler,
             num_workers=self.num_workers,
             pin_memory=True,
             collate_fn=lambda batch: tuple(zip(*batch)),
